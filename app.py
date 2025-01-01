@@ -1,7 +1,7 @@
 from shiny import render, ui
 from shiny.express import input
 
-ui.panel_title("Marks App")
+ui.panel_title("Marks Apps")
 ui.input_slider("n", "N", 0, 100, 20)
 
 
