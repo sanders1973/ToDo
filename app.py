@@ -1,6 +1,6 @@
 import shiny
 from shiny import reactive
-from shiny import ui, render, App
+from shiny.express import input, render, ui
 import pandas as pd
 
 # Initialize the data frame to store the to-do items
@@ -28,9 +28,12 @@ app_ui = ui.page_fluid(
 )
 
 # Define the server logic
-def server(input, output, session):
-"""
 
+def server(input, output, session):
+    @reactive.effect
+    def _():
+        print(input.text())
+"""
     # Function to update the select input choices
     def update_select_choices():
         session.send_input_message("select_item", choices=todo_df["Item"].tolist())
