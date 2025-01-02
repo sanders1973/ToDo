@@ -30,6 +30,7 @@ app_ui = ui.page_fluid(
 # Define the server logic
 def server(input, output, session):
 """
+
     # Function to update the select input choices
     def update_select_choices():
         session.send_input_message("select_item", choices=todo_df["Item"].tolist())
@@ -75,7 +76,7 @@ def server(input, output, session):
         render.DataGrid(todo_df)
        ## output.todo_markdown(todo_df.to_markdown(index=False))
 
-        """  
+"""  
 
 # Create the app
 app = App(app_ui, server)
