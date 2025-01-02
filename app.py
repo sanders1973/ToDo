@@ -72,8 +72,8 @@ def server(input, output, session):
 
     @reactive.effect
     def render_todo_list():
-        output.todo_list(todo_df)
-        output.todo_markdown(todo_df.to_markdown(index=False))
+        output.render.DataGrid(todo_df)
+       ## output.todo_markdown(todo_df.to_markdown(index=False))
 
 # Create the app
 app = App(app_ui, server)
