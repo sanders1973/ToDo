@@ -67,7 +67,9 @@ def server(input, output, session):
                 elif direction == "down" and index < len(todo_df) - 1:
                     todo_df.iloc[index], todo_df.iloc[index+1] = todo_df.iloc[index+1].copy(), todo_df.iloc[index].copy()
                 session.reset()
-"""
+
+                """
+
     @reactive.effect
     def render_todo_list():
         output.todo_list(todo_df)
