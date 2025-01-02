@@ -9,23 +9,6 @@ initial_df = pd.DataFrame({
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
-        ui.accordion(
-            ui.accordion_panel(
-                "List Selection",
-                ui.panel_well(
-                    ui.input_radio_buttons(
-                        "current_list",
-                        "Choose List",
-                        choices={
-                            f"list_{i}": f"List {i}" 
-                            for i in range(1, 9)
-                        },
-                        selected="list_1"
-                    ),
-                )
-            )
-        ),
-        ui.br(),
         ui.panel_well(
             "Add New Task",
             ui.input_text("task", "Task Name"),
@@ -53,13 +36,30 @@ app_ui = ui.page_sidebar(
         ),
         width="400px"
     ),
-    ui.navset_tab(
-        *[ui.nav_panel(
-            f"List {i}",
-            ui.card(
-                ui.output_ui(f"markdown_list_{i}")  # Changed to output_ui
+    ui.card(
+        ui.row(
+            ui.column(12,
+                ui.p("Select lists to view:"),
+                ui.input_checkbox_group(
+                    "view_lists",
+                    None,
+                    choices={f"list_{i}": f"List {i}" for i in range(1, 9)},
+                    selected=["list_1"],
+                    inline=True
+                ),
+                ui.hr(),
+                ui.p("Select list to modify:"),
+                ui.input_radio_buttons(
+                    "current_list",
+                    None,
+                    choices={f"list_{i}": f"List {i}" for i in range(1, 9)},
+                    selected="list_1",
+                    inline=True
+                ),
             )
-        ) for i in range(1, 9)]
+        ),
+        ui.hr(),
+        ui.output_ui("list_columns")
     )
 )
 
@@ -72,6 +72,45 @@ def server(input, output, session):
 
     def get_current_list():
         return lists_rv[input.current_list()]
+
+    @render.ui
+    def list_columns():
+        selected_lists = input.view_lists()
+        if not selected_lists:
+            return ui.p("Select at least one list to view")
+        
+        # Calculate column width based on number of selected lists
+        col_width = 12 // len(selected_lists)
+        
+        return ui.row(
+            *[ui.column(col_width,
+                ui.pre(
+                    render_markdown_list(list_id)
+                )
+            ) for list_id in selected_lists]
+        )
+
+    def render_markdown_list(list_id):
+        df = lists_rv[list_id]()
+        list_num = list_id.split('_')[1]
+        
+        if len(df) == 0:
+            return f"List {list_num}\n\nNo tasks yet!"
+        
+        lines = []
+        lines.append(f"List {list_num}")
+        lines.append("")  # Blank line after title
+        
+        for idx, row in df.iterrows():
+            lines.append(f"• {row['task']}")  # Task with bullet point
+            if row['description']:
+                desc_lines = row['description'].split('\n')
+                for line in desc_lines:
+                    if line.strip():  # Only add non-empty lines
+                        lines.append(f"    {line}")  # Indented description
+            lines.append("")  # Blank line between items
+        
+        return '\n'.join(lines).rstrip()  # Remove trailing whitespace
 
     @render.ui
     def task_selector():
@@ -121,31 +160,6 @@ def server(input, output, session):
                 ui.input_action_button("move_to_list", "Move Selected Tasks")
             )
         return ui.p("Select tasks to move")
-
-    # Create separate render functions for each list
-    def create_markdown_list_render(list_num):
-        @render.ui
-        def markdown_list():
-            df = lists_rv[f"list_{list_num}"]()
-            if len(df) == 0:
-                return ui.p(f"List {list_num}", ui.br(), "No tasks yet!")
-            
-            output = [f"List {list_num}\n"]
-            
-            for idx, row in df.iterrows():
-                output.append(f"\n• {row['task']}")
-                if row['description']:
-                    desc_lines = row['description'].split('\n')
-                    for line in desc_lines:
-                        if line.strip():
-                            output.append(f"    {line}")
-            
-            return ui.pre('\n'.join(output))
-        return markdown_list
-
-    # Register render functions for each list
-    for i in range(1, 9):
-        setattr(output, f"markdown_list_{i}", create_markdown_list_render(i))
 
     @reactive.effect
     @reactive.event(input.add)
