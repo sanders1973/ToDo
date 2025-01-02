@@ -54,7 +54,7 @@ def server(input, output, session):
             update_select_choices()
             session.reset()
 
-"""
+    """
     @reactive.effect
     def move_item(direction):
         if (direction == "up" and input.move_up()) or (direction == "down" and input.move_down()):
@@ -68,7 +68,7 @@ def server(input, output, session):
                     todo_df.iloc[index], todo_df.iloc[index+1] = todo_df.iloc[index+1].copy(), todo_df.iloc[index].copy()
                 session.reset()
 
-                """
+    """            
 
     @reactive.effect
     def render_todo_list():
