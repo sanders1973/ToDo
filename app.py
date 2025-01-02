@@ -53,7 +53,14 @@ app_ui = ui.page_sidebar(
         ),
         width="400px"
     ),
-    ui.output_code("markdown_list"),
+    ui.navset_tab(
+        *[ui.nav_panel(
+            f"List {i}",
+            ui.card(
+                ui.output_ui(f"markdown_list_{i}")  # Changed to output_ui
+            )
+        ) for i in range(1, 9)]
+    )
 )
 
 def server(input, output, session):
@@ -61,7 +68,7 @@ def server(input, output, session):
         f"list_{i}": reactive.value(initial_df.copy()) 
         for i in range(1, 9)
     }
-    selected_rows = reactive.value([])  # Changed to list for multiple selections
+    selected_rows = reactive.value([])
 
     def get_current_list():
         return lists_rv[input.current_list()]
@@ -72,17 +79,17 @@ def server(input, output, session):
         if len(df) == 0:
             return ui.p("No tasks available")
         
-        return ui.input_checkbox_group(  # Changed to checkbox group
-            "selected_tasks",  # Changed name to plural
-            "Select Tasks",    # Changed label to plural
+        return ui.input_checkbox_group(
+            "selected_tasks",
+            "Select Tasks",
             choices={str(i): row['task'] for i, row in df.iterrows()},
-            selected=[str(i) for i in selected_rows()]  # Support multiple selections
+            selected=[str(i) for i in selected_rows()]
         )
 
     @render.ui
     def edit_panel():
         selected = selected_rows()
-        if len(selected) == 1:  # Only show edit panel when exactly one task is selected
+        if len(selected) == 1:
             df = get_current_list()()
             return ui.div(
                 ui.input_text("edit_task", "Task Name", 
@@ -97,7 +104,7 @@ def server(input, output, session):
 
     @render.ui
     def move_to_list_panel():
-        if len(selected_rows()) > 0:  # Show if any tasks are selected
+        if len(selected_rows()) > 0:
             current_list = input.current_list()
             choices = {
                 f"list_{i}": f"List {i}"
@@ -111,28 +118,34 @@ def server(input, output, session):
                     "Move to List",
                     choices=choices
                 ),
-                ui.input_action_button("move_to_list", "Move Selected Tasks")  # Updated label
+                ui.input_action_button("move_to_list", "Move Selected Tasks")
             )
         return ui.p("Select tasks to move")
 
-    @render.text
-    def markdown_list():
-        current_list_name = input.current_list().replace('_', ' ').title()
-        df = get_current_list()()
-        if len(df) == 0:
-            return f"{current_list_name}\n\nNo tasks yet!"
-        
-        output = [f"{current_list_name}\n"]
-        
-        for idx, row in df.iterrows():
-            output.append(f"\n• {row['task']}")
-            if row['description']:
-                desc_lines = row['description'].split('\n')
-                for line in desc_lines:
-                    if line.strip():
-                        output.append(f"    {line}")
-        
-        return '\n'.join(output)
+    # Create separate render functions for each list
+    def create_markdown_list_render(list_num):
+        @render.ui
+        def markdown_list():
+            df = lists_rv[f"list_{list_num}"]()
+            if len(df) == 0:
+                return ui.p(f"List {list_num}", ui.br(), "No tasks yet!")
+            
+            output = [f"List {list_num}\n"]
+            
+            for idx, row in df.iterrows():
+                output.append(f"\n• {row['task']}")
+                if row['description']:
+                    desc_lines = row['description'].split('\n')
+                    for line in desc_lines:
+                        if line.strip():
+                            output.append(f"    {line}")
+            
+            return ui.pre('\n'.join(output))
+        return markdown_list
+
+    # Register render functions for each list
+    for i in range(1, 9):
+        setattr(output, f"markdown_list_{i}", create_markdown_list_render(i))
 
     @reactive.effect
     @reactive.event(input.add)
@@ -174,11 +187,9 @@ def server(input, output, session):
             source_df = get_current_list()()
             tasks_to_move = source_df.iloc[selected].copy()
             
-            # Remove selected tasks from current list
             source_df = source_df.drop(selected).reset_index(drop=True)
             get_current_list().set(source_df.copy())
             
-            # Add tasks to destination list
             dest_list = lists_rv[input.destination_list()]
             dest_df = dest_list()
             dest_df = pd.concat([dest_df, tasks_to_move], ignore_index=True)
@@ -200,7 +211,7 @@ def server(input, output, session):
     @reactive.event(input.move_up)
     def move_task_up():
         selected = selected_rows()
-        if len(selected) == 1 and selected[0] > 0:  # Only move one task at a time
+        if len(selected) == 1 and selected[0] > 0:
             df = get_current_list()()
             idx = selected[0]
             df.iloc[idx-1:idx+1] = df.iloc[idx-1:idx+1].iloc[::-1].values
@@ -212,7 +223,7 @@ def server(input, output, session):
     @reactive.event(input.move_down)
     def move_task_down():
         selected = selected_rows()
-        if len(selected) == 1 and selected[0] < len(get_current_list()())-1:  # Only move one task at a time
+        if len(selected) == 1 and selected[0] < len(get_current_list()())-1:
             df = get_current_list()()
             idx = selected[0]
             df.iloc[idx:idx+2] = df.iloc[idx:idx+2].iloc[::-1].values
