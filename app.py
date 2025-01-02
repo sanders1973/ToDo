@@ -33,7 +33,7 @@ def server(input, output, session):
     def update_select_choices():
         session.send_input_message("select_item", choices=todo_df["Item"].tolist())
 
-    @reactive.Effect
+    @reactive.effect
     def add_item():
         if input.add():
             new_item = input.new_item()
@@ -44,7 +44,7 @@ def server(input, output, session):
                 update_select_choices()
                 session.reset()
 
-    @reactive.Effect
+    @reactive.effect
     def delete_item():
         if input.delete():
             selected_item = input.select_item()
@@ -53,7 +53,7 @@ def server(input, output, session):
             update_select_choices()
             session.reset()
 
-    @reactive.Effect
+    @reactive.effect
     def move_item(direction):
         if (direction == "up" and input.move_up()) or (direction == "down" and input.move_down()):
             selected_item = input.select_item()
@@ -66,7 +66,7 @@ def server(input, output, session):
                     todo_df.iloc[index], todo_df.iloc[index+1] = todo_df.iloc[index+1].copy(), todo_df.iloc[index].copy()
                 session.reset()
 
-    @reactive.Effect
+    @reactive.effect
     def render_todo_list():
         output.todo_list(todo_df)
         output.todo_markdown(todo_df.to_markdown(index=False))
