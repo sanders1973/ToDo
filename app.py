@@ -1,6 +1,6 @@
 import shiny
 from shiny import reactive
-from shiny.express import input, render, ui
+from shiny.express import input, ui
 import pandas as pd
 
 # Initialize the data frame to store the to-do items
