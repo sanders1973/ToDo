@@ -68,12 +68,14 @@ def server(input, output, session):
                     todo_df.iloc[index], todo_df.iloc[index+1] = todo_df.iloc[index+1].copy(), todo_df.iloc[index].copy()
                 session.reset()
 
-    """            
+             
 
     @render.data_frame
     def render_todo_list():
         render.DataGrid(todo_df)
        ## output.todo_markdown(todo_df.to_markdown(index=False))
+
+        """  
 
 # Create the app
 app = App(app_ui, server)
