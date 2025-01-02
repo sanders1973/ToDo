@@ -29,7 +29,7 @@ app_ui = ui.page_fluid(
 
 # Define the server logic
 def server(input, output, session):
-
+"""
     # Function to update the select input choices
     def update_select_choices():
         session.send_input_message("select_item", choices=todo_df["Item"].tolist())
@@ -54,7 +54,7 @@ def server(input, output, session):
             update_select_choices()
             session.reset()
 
-    """
+    
     @reactive.effect
     def move_item(direction):
         if (direction == "up" and input.move_up()) or (direction == "down" and input.move_down()):
