@@ -70,9 +70,9 @@ def server(input, output, session):
 
     """            
 
-    @reactive.effect
+    @render.data_frame
     def render_todo_list():
-        output.render.DataGrid(todo_df)
+        render.DataGrid(todo_df)
        ## output.todo_markdown(todo_df.to_markdown(index=False))
 
 # Create the app
