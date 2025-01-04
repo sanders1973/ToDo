@@ -6,13 +6,13 @@ import os
 
 # Define the list names
 LIST_NAMES = {
-    "list1": "Personal Tasks",
-    "list2": "Work Tasks",
-    "list3": "Shopping List",
-    "list4": "Project Ideas",
-    "list5": "Books to Read",
-    "list6": "Movies to Watch",
-    "list7": "Goals",
+    "list1": "Today",
+    "list2": "This Week",
+    "list3": "Meetings",
+    "list4": "Backlog",
+    "list5": "Parked",
+    "list6": "Goals",
+    "list7": "Personal",
     "list8": "Miscellaneous"
 }
 
@@ -583,6 +583,6 @@ def server(input, output, session):
         except Exception as e:
             github_status.set(f"Error loading: {str(e)}")
  
- 
+
 
 app = App(app_ui, server)
