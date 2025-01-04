@@ -18,6 +18,7 @@ LIST_NAMES = {
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
+        ui.input_dark_mode(),
         ui.input_select(
             "active_list",
             "Working List (for adding/editing)",
