@@ -583,4 +583,5 @@ def server(input, output, session):
         except Exception as e:
             github_status.set(f"Error loading: {str(e)}")
 
+
 app = App(app_ui, server)
