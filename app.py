@@ -19,43 +19,41 @@ LIST_NAMES = {
 app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.input_dark_mode(),
-        ui.input_select(
-            "active_list",
-            "Working List (for adding/editing)",
-            LIST_NAMES
-        ),
-        ui.hr(),
         ui.input_text("task", "Enter Task"),
         ui.input_text("description", "Enter Description"),
         ui.input_action_button("add", "Add Task", class_="btn-primary"),
         ui.hr(),
         ui.h4("Manage Tasks"),
         ui.output_ui("task_selector"),
-        ui.output_ui("edit_controls"),  # Moved up
-        ui.hr(),  # Added hr here
-        ui.output_ui("move_controls"),  # Moved down
+        ui.output_ui("edit_controls"),
         ui.hr(),
-
-        # Add GitHub save controls
+        ui.output_ui("move_controls"),
+        ui.hr(),
         ui.h4("Save to GitHub"),
         ui.input_text(
             "github_repo",
             "Repository (user/repo)",
             value="",
-            autocomplete="username/rep"  # Hint to browser this is a username field
+            autocomplete="username/rep"
         ),
-        ui.input_password(  # Simple password input
+        ui.input_password(
             "github_token",
             "Github Token",
             value=""
         ),
-        
-     #   ui.input_text("github_path", "File path (e.g., tasks.txt)"),
         ui.output_text("github_status_output"),
-     #   ui.input_action_button("save_github", "Save to GitHub", class_="btn-success"),        
         ui.input_action_button("load_github", "Load from GitHub", class_="btn-info"),
-       
         width=350
+    ),
+
+    ui.card(
+        ui.input_radio_buttons(
+            "active_list",
+            "Working List (for adding/editing)",
+            LIST_NAMES,
+            inline=True
+        ),
+        style="margin-bottom: 1rem;"
     ),
 
     ui.card(
@@ -70,10 +68,11 @@ app_ui = ui.page_sidebar(
                 )
             )
         ),
-        ui.output_ui("unsaved_changes_alert"),  # Add this line
+        ui.output_ui("unsaved_changes_alert"),
         ui.output_ui("task_lists_display")
     )
 )
+
 
 def server(input, output, session):
     # Create a dictionary to store tasks and descriptions for each list
