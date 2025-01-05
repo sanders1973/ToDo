@@ -24,12 +24,12 @@ app_ui = ui.page_sidebar(
         ui.input_text("task", "Enter Task"),
         ui.input_text_area("description", "Enter Description", height="100px"),  # Changed this line
         ui.input_action_button("add", "Add Task", class_="btn-primary"),
-        ui.hr(),
-        ui.h4("Manage Tasks"),
+       # ui.hr(),
+      #  ui.h4("Manage Tasks"),
         ui.output_ui("task_selector"),
         ui.output_ui("edit_controls"),
-        ui.hr(),
-        ui.h4("Save to GitHub"),
+       # ui.hr(),
+      #  ui.h4("Save to GitHub"),
         ui.input_text(
             "github_repo",
             "Repository (user/repo)",
@@ -43,8 +43,8 @@ app_ui = ui.page_sidebar(
         ),
         ui.output_text("github_status_output"),
         ui.input_action_button("load_github", "Load from GitHub", class_="btn-info"),
-        ui.hr(),
-        ui.h4("List Settings"),
+      #  ui.hr(),
+      #  ui.h4("List Settings"),
         ui.input_action_button("edit_list_names", "Edit List Names", class_="btn-secondary"),
         ui.output_ui("list_name_controls"),
         width=350
@@ -57,11 +57,11 @@ app_ui = ui.page_sidebar(
             LIST_NAMES,
             inline=True
         ),
-        style="margin-bottom: 1rem;"
+        style="margin-bottom: 0;"
     ),
     ui.card(
         ui.output_ui("move_controls"),
-        style="margin-bottom: 1rem;"
+        style="margin-bottom: 0;"
     ),
     ui.card(
         ui.row(
@@ -367,8 +367,7 @@ def server(input, output, session):
         )    
     
     
-    
-    
+   
     
     @reactive.effect
     @reactive.event(lists_data)
@@ -379,6 +378,15 @@ def server(input, output, session):
 
         path = "ToDoList.txt"
         try:
+            # First check if we can connect to GitHub
+            try:
+                test_url = "https://api.github.com"
+                requests.get(test_url, timeout=2)
+            except (requests.ConnectionError, requests.Timeout):
+                github_status.set("⚠️ Changes pending - Currently offline")
+                return
+
+            # If we're online, proceed with save
             # Prepare the data
             data = lists_data.get()
             formatted_data = ""
@@ -427,9 +435,10 @@ def server(input, output, session):
             else:
                 github_status.set(f"❌ Error auto-saving: {response.status_code}")
 
+        except requests.RequestException as e:
+            github_status.set("⚠️ Changes pending - Network error")
         except Exception as e:
             github_status.set(f"❌ Error auto-saving: {str(e)}")
-    
 
 
 
