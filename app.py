@@ -13,7 +13,9 @@ LIST_NAMES = {
     "list5": "List 5",
     "list6": "List 6",
     "list7": "List 7",
-    "list8": "List 8"
+    "list8": "List 8",
+    "list9": "List 9",
+    "list10": "List 10"
 }
 
 app_ui = ui.page_sidebar(
