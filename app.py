@@ -6,14 +6,14 @@ import os
 
 # Define the list names
 LIST_NAMES = {
-    "list1": "Today",
-    "list2": "This Week",
-    "list3": "Meetings",
-    "list4": "Backlog",
-    "list5": "Parked",
-    "list6": "Goals",
-    "list7": "Personal",
-    "list8": "Miscellaneous"
+    "list1": "List 1",
+    "list2": "List 2",
+    "list3": "List 3",
+    "list4": "List 4",
+    "list5": "List 5",
+    "list6": "List 6",
+    "list7": "List 7",
+    "list8": "List 8"
 }
 
 app_ui = ui.page_sidebar(
