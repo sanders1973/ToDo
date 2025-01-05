@@ -11,11 +11,9 @@ LIST_NAMES = {
     "list3": "Meetings",
     "list4": "Backlog",
     "list5": "Parked",
-    "list6": "Done",
-    "list7": "Follow up",
-    "list8": "Goals",
-    "list9": "Personal",
-    "list10": "Miscellaneous"
+    "list6": "Goals",
+    "list7": "Personal",
+    "list8": "Miscellaneous"
 }
 
 app_ui = ui.page_sidebar(
@@ -28,8 +26,6 @@ app_ui = ui.page_sidebar(
         ui.h4("Manage Tasks"),
         ui.output_ui("task_selector"),
         ui.output_ui("edit_controls"),
-        ui.hr(),
-        ui.output_ui("move_controls"),
         ui.hr(),
         ui.h4("Save to GitHub"),
         ui.input_text(
@@ -61,7 +57,10 @@ app_ui = ui.page_sidebar(
         ),
         style="margin-bottom: 1rem;"
     ),
-
+    ui.card(
+        ui.output_ui("move_controls"),
+        style="margin-bottom: 1rem;"
+    ),
     ui.card(
         ui.row(
             ui.column(12,
@@ -170,6 +169,8 @@ def server(input, output, session):
         
         return ui.row(*columns)
 
+
+
     @output
     @render.ui
     def move_controls():
@@ -180,15 +181,22 @@ def server(input, output, session):
         move_options = {k: v for k, v in LIST_NAMES.items() if k != current_list_id}
         
         return ui.div(
-            ui.hr(),
-            ui.h4("Move Tasks"),
-            ui.input_select(
-                "move_to_list",
-                "Select Destination List",
-                move_options
-            ),
-            ui.input_action_button("move_tasks", "Move Selected Tasks", class_="btn-info"),
+            ui.div(
+                ui.input_radio_buttons(
+                    "move_to_list",
+                    "Move selected tasks to:",
+                    move_options,
+                    inline=True
+                ),
+                ui.input_action_button(
+                    "move_tasks", 
+                    "Move Tasks", 
+                    class_="btn-info"
+                ),
+                style="display: flex; align-items: center; gap: 1rem;"
+            )
         )
+    
 
     @output
     @render.ui
@@ -589,7 +597,6 @@ def server(input, output, session):
         except Exception as e:
             github_status.set(f"Error loading: {str(e)}")
  
-
     editing_names = reactive.value(False)
     
     @output
@@ -657,7 +664,5 @@ def server(input, output, session):
         
         editing_names.set(False)
         changes_unsaved.set(True)
-
-
 
 app = App(app_ui, server)
