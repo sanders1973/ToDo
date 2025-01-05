@@ -20,9 +20,9 @@ LIST_NAMES = {
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
-        ui.input_dark_mode(),
+        ui.input_dark_mode(value=True),
         ui.input_text("task", "Enter Task"),
-        ui.input_text("description", "Enter Description"),
+        ui.input_text_area("description", "Enter Description", height="100px"),  # Changed this line
         ui.input_action_button("add", "Add Task", class_="btn-primary"),
         ui.hr(),
         ui.h4("Manage Tasks"),
@@ -66,12 +66,12 @@ app_ui = ui.page_sidebar(
     ui.card(
         ui.row(
             ui.column(12,
-                ui.input_selectize(
+                ui.input_checkbox_group(
                     "display_lists",
                     "Select Lists to Display",
                     LIST_NAMES,
-                    multiple=True,
-                    selected=["list1"]
+                    selected=["list1"],
+                    inline=True
                 )
             )
         ),
@@ -153,9 +153,10 @@ def server(input, output, session):
                 task_items.append(ui.p("No tasks in this list"))
             else:
                 for i, (task, desc) in enumerate(zip(current_tasks, current_descriptions), 1):
+                    desc_paragraphs = [ui.p(p, style="text-indent:50px") for p in desc.split('\n')]
                     task_html = ui.div(
                         ui.h5(f"• {task}"),
-                        ui.p(desc,style="text-indent:50px"),
+                        *desc_paragraphs,
                         style="margin-bottom: 0;"
                     )
                     task_items.append(task_html)
@@ -218,10 +219,11 @@ def server(input, output, session):
                     "Task",
                     value=current_list["tasks"][task_idx]
                 ),
-                ui.input_text(
+                ui.input_text_area(
                     "edit_description",
                     "Description",
-                    value=current_list["descriptions"][task_idx]
+                    value=current_list["descriptions"][task_idx],
+                    height="100px"
                 ),
                 ui.input_action_button("save_edit", "Save", class_="btn-success"),
                 ui.input_action_button("cancel_edit", "Cancel", class_="btn-secondary"),
@@ -525,11 +527,69 @@ def server(input, output, session):
         except Exception as e:
             github_status.set(f"Error: {str(e)}")
 
-
+    def load_list_names_from_github():
+        if not input.github_token() or not input.github_repo():
+            github_status.set("Please fill in GitHub credentials to load list names")
+            return False
+    
+        try:
+            # GitHub API endpoint
+            repo = input.github_repo()
+            path = "ToDoListNames.txt"
+            url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    
+            # Headers for authentication
+            headers = {
+                "Authorization": f"token {input.github_token()}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+    
+            # Get the file content
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 404:
+                # File doesn't exist yet, this is okay
+                github_status.set("No saved list names found, using defaults")
+                return True
+            elif response.status_code == 200:
+                # Decode content from base64
+                content = base64.b64decode(response.json()["content"]).decode()
+                
+                # Parse the content and update LIST_NAMES
+                for line in content.strip().split('\n'):
+                    if ':' in line:
+                        list_id, name = line.split(':', 1)
+                        if list_id in LIST_NAMES:
+                            LIST_NAMES[list_id] = name
+    
+                # Update UI elements
+                ui.update_radio_buttons(
+                    "active_list",
+                    choices=LIST_NAMES
+                )
+                ui.update_checkbox_group(
+                    "display_lists",
+                    choices=LIST_NAMES,
+                    selected=input.display_lists()
+                )
+                
+                github_status.set("Successfully loaded list names from GitHub!")
+                return True
+            else:
+                github_status.set(f"Error loading list names from GitHub: {response.status_code}")
+                return False
+    
+        except Exception as e:
+            github_status.set(f"Error loading list names: {str(e)}")
+            return False    
 
     @reactive.effect
     @reactive.event(input.load_github)      
-    def load_from_github():
+    def load_from_github():        
+        # First load the list names
+        if not load_list_names_from_github():
+            return
+                
         path = "ToDoList.txt"
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in all GitHub fields")
@@ -659,12 +719,68 @@ def server(input, output, session):
             "active_list",
             choices=LIST_NAMES
         )
-        ui.update_selectize(
+        ui.update_checkbox_group(
             "display_lists",
-            choices=LIST_NAMES
+            choices=LIST_NAMES,
+            selected=input.display_lists()
         )
+        
+        # Save to GitHub if credentials are available
+        save_list_names_to_github()
         
         editing_names.set(False)
         changes_unsaved.set(True)
+
+    def save_list_names_to_github():
+        if not input.github_token() or not input.github_repo():
+            github_status.set("Please fill in GitHub credentials to save list names")
+            return False
+
+        try:
+            # GitHub API endpoint
+            repo = input.github_repo()
+            path = "ToDoListNames.txt"
+            url = f"https://api.github.com/repos/{repo}/contents/{path}"
+
+            # Headers for authentication
+            headers = {
+                "Authorization": f"token {input.github_token()}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+
+            # Format the list names data
+            formatted_data = "\n".join([f"{list_id}:{name}" for list_id, name in LIST_NAMES.items()])
+            content = base64.b64encode(formatted_data.encode()).decode()
+
+            # Check if file exists
+            try:
+                response = requests.get(url, headers=headers)
+                sha = response.json()["sha"] if response.status_code == 200 else None
+            except:
+                sha = None
+
+            # Prepare the data for the API request
+            data = {
+                "message": "Update list names",
+                "content": content,
+            }
+            if sha:
+                data["sha"] = sha
+
+            # Make the API request
+            response = requests.put(url, headers=headers, json=data)
+
+            if response.status_code in [200, 201]:
+                github_status.set("Successfully saved list names to GitHub!")
+                return True
+            else:
+                github_status.set(f"Error saving list names to GitHub: {response.status_code}")
+                return False
+
+        except Exception as e:
+            github_status.set(f"Error saving list names: {str(e)}")
+            return False
+
+    
 
 app = App(app_ui, server)
