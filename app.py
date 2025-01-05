@@ -212,7 +212,7 @@ def server(input, output, session):
             current_list = get_current_list()
             
             return ui.div(
-                ui.hr(),
+                #ui.hr(),
                 ui.h4("Edit Task"),
                 ui.input_text(
                     "edit_task",
@@ -230,13 +230,13 @@ def server(input, output, session):
             )
         else:
             return ui.div(
-                        ui.hr(),
+                       # ui.hr(),
                         ui.input_action_button("start_edit", "Edit Selected Task", class_="btn-warning"),
                         ui.br(),
                         ui.br(),
                         ui.div(
-                            ui.input_action_button("move_up", "↑ Move Up", class_="btn-primary"),
-                            ui.input_action_button("move_down", "↓ Move Down", class_="btn-primary"),
+                            ui.input_action_button("move_up", "↑ Up", class_="btn-primary"),
+                            ui.input_action_button("move_down", "↓ Down", class_="btn-primary"),
                             style="display: flex; gap: 10px;"
                         )
                     )
