@@ -11,9 +11,11 @@ LIST_NAMES = {
     "list3": "Meetings",
     "list4": "Backlog",
     "list5": "Parked",
-    "list6": "Goals",
-    "list7": "Personal",
-    "list8": "Miscellaneous"
+    "list6": "Done",
+    "list7": "Follow up",
+    "list8": "Goals",
+    "list9": "Personal",
+    "list10": "Miscellaneous"
 }
 
 app_ui = ui.page_sidebar(
@@ -43,6 +45,10 @@ app_ui = ui.page_sidebar(
         ),
         ui.output_text("github_status_output"),
         ui.input_action_button("load_github", "Load from GitHub", class_="btn-info"),
+        ui.hr(),
+        ui.h4("List Settings"),
+        ui.input_action_button("edit_list_names", "Edit List Names", class_="btn-secondary"),
+        ui.output_ui("list_name_controls"),
         width=350
     ),
 
@@ -583,6 +589,75 @@ def server(input, output, session):
         except Exception as e:
             github_status.set(f"Error loading: {str(e)}")
  
+
+    editing_names = reactive.value(False)
+    
+    @output
+    @render.ui
+    def list_name_controls():
+        if not editing_names.get():
+            return ui.div()
+            
+        inputs = []
+        for list_id, current_name in LIST_NAMES.items():
+            inputs.extend([
+                ui.input_text(
+                    f"name_{list_id}",
+                    f"Name for {list_id}:",
+                    value=current_name
+                ),
+                ui.br()
+            ])
+        
+        return ui.div(
+            ui.card(
+                *inputs,
+                ui.div(
+                    ui.input_action_button(
+                        "save_list_names", 
+                        "Save Names", 
+                        class_="btn-success"
+                    ),
+                    ui.input_action_button(
+                        "cancel_list_names", 
+                        "Cancel", 
+                        class_="btn-secondary"
+                    ),
+                    style="display: flex; gap: 10px;"
+                )
+            )
+        )
+
+    @reactive.effect
+    @reactive.event(input.edit_list_names)
+    def start_editing_names():
+        editing_names.set(True)
+
+    @reactive.effect
+    @reactive.event(input.cancel_list_names)
+    def cancel_editing_names():
+        editing_names.set(False)
+
+    @reactive.effect
+    @reactive.event(input.save_list_names)
+    def save_list_names():
+        # Update the LIST_NAMES dictionary with new values
+        for list_id in LIST_NAMES.keys():
+            LIST_NAMES[list_id] = getattr(input, f"name_{list_id}")()
+        
+        # Update any UI elements that depend on list names
+        ui.update_radio_buttons(
+            "active_list",
+            choices=LIST_NAMES
+        )
+        ui.update_selectize(
+            "display_lists",
+            choices=LIST_NAMES
+        )
+        
+        editing_names.set(False)
+        changes_unsaved.set(True)
+
 
 
 app = App(app_ui, server)
