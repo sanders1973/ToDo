@@ -20,8 +20,8 @@ LIST_NAMES = {
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
-        ui.input_dark_mode(), 
-        ui.input_dark_mode(value=True),
+        ui.input_dark_mode(id=None, mode="dark"),
+        
         ui.input_text("task", "Enter Task"),
         ui.input_text_area("description", "Enter Description", height="100px"),  # Changed this line
         ui.input_action_button("add", "Add Task", class_="btn-primary"),
@@ -60,10 +60,8 @@ app_ui = ui.page_sidebar(
         ),
         style="margin-bottom: 0;"
     ),
-    ui.card(
-        ui.output_ui("move_controls"),
-        style="margin-bottom: 0;"
-    ),
+    ui.output_ui("move_controls"),
+  
     ui.card(
         ui.row(
             ui.column(12,
@@ -173,8 +171,6 @@ def server(input, output, session):
         
         return ui.row(*columns)
 
-
-
     @output
     @render.ui
     def move_controls():
@@ -184,23 +180,25 @@ def server(input, output, session):
         current_list_id = input.active_list()
         move_options = {k: v for k, v in LIST_NAMES.items() if k != current_list_id}
         
-        return ui.div(
+        return ui.card(
             ui.div(
-                ui.input_radio_buttons(
-                    "move_to_list",
-                    "Move selected tasks to:",
-                    move_options,
-                    inline=True
-                ),
-                ui.input_action_button(
-                    "move_tasks", 
-                    "Move Tasks", 
-                    class_="btn-info"
-                ),
-                style="display: flex; align-items: center; gap: 1rem;"
-            )
+                ui.div(
+                    ui.input_radio_buttons(
+                        "move_to_list",
+                        "Move selected tasks to:",
+                        move_options,
+                        inline=True
+                    ),
+                    ui.input_action_button(
+                        "move_tasks", 
+                        "Move Tasks", 
+                        class_="btn-info"
+                    ),
+                    style="display: flex; align-items: center; gap: 0;"
+                )
+            ),
+            style="margin-bottom: 0;"
         )
-    
 
     @output
     @render.ui
