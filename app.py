@@ -20,6 +20,7 @@ LIST_NAMES = {
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
+        ui.input_dark_mode(), 
         ui.input_dark_mode(value=True),
         ui.input_text("task", "Enter Task"),
         ui.input_text_area("description", "Enter Description", height="100px"),  # Changed this line
