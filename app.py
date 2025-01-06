@@ -21,14 +21,16 @@ LIST_NAMES = {
 app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.input_dark_mode(id=None, mode="dark"),
-        
+        ui.input_switch("autosave_enabled", "Enable GitHub Auto-save", value=True),
+        ui.output_text("unsaved_changes_alert"),
+        ui.output_ui("manual_save_button"),
         ui.input_text("task", "Enter Task"),
         ui.input_text_area("description", "Enter Description", height="100px"),  # Changed this line
         ui.input_action_button("add", "Add Task", class_="btn-primary"),
        # ui.hr(),
       #  ui.h4("Manage Tasks"),
         ui.output_ui("task_selector"),
-        ui.output_ui("edit_controls"),
+      
        # ui.hr(),
       #  ui.h4("Save to GitHub"),
         ui.input_text(
@@ -59,6 +61,10 @@ app_ui = ui.page_sidebar(
             inline=True
         ),
         style="margin-bottom: 0;"
+    ),
+    ui.card(
+    ui.output_ui("edit_controls"),
+    style="margin-bottom: 0;"
     ),
     ui.output_ui("move_controls"),
   
@@ -111,7 +117,7 @@ def server(input, output, session):
             ui.update_text("task", value="")
             ui.update_text("description", value="")
 
-    @output
+    
     @render.ui
     def task_selector():
         current_list = get_current_list()
@@ -129,7 +135,7 @@ def server(input, output, session):
             )
         )
 
-    @output
+    
     @render.ui
     def task_lists_display():
         selected_lists = input.display_lists()
@@ -171,7 +177,7 @@ def server(input, output, session):
         
         return ui.row(*columns)
 
-    @output
+    
     @render.ui
     def move_controls():
         if not input.selected_tasks():
@@ -200,27 +206,20 @@ def server(input, output, session):
             style="margin-bottom: 0;"
         )
 
-    @output
     @render.ui
     def edit_controls():
         if not input.selected_tasks():
             return ui.div()
         
-        # Delete button always shows if any tasks are selected
-        delete_button = ui.div(
-            ui.input_action_button("delete_task", "Delete Selected Tasks", class_="btn-danger"),
-            ui.br(),
-            ui.br()
-        )
-        
-        # Edit controls only show for single selection
+        # Show controls based on selection
         if len(input.selected_tasks()) == 1:
+            # Single item selected - show all controls
             if editing.get():
+                # Show edit form
                 task_idx = int(input.selected_tasks()[0]) - 1
                 current_list = get_current_list()
                 
                 return ui.div(
-                    delete_button,
                     ui.h4("Edit Task"),
                     ui.input_text(
                         "edit_task",
@@ -233,24 +232,36 @@ def server(input, output, session):
                         value=current_list["descriptions"][task_idx],
                         height="100px"
                     ),
-                    ui.input_action_button("save_edit", "Save", class_="btn-success"),
-                    ui.input_action_button("cancel_edit", "Cancel", class_="btn-secondary"),
-                )
-            else:
-                return ui.div(
-                    delete_button,
-                    ui.input_action_button("start_edit", "Edit Selected Task", class_="btn-warning"),
-                    ui.br(),
-                    ui.br(),
                     ui.div(
-                        ui.input_action_button("move_up", "↑ Up", class_="btn-primary"),
-                        ui.input_action_button("move_down", "↓ Down", class_="btn-primary"),
+                        ui.input_action_button("save_edit", "Save", class_="btn-success"),
+                        ui.input_action_button("cancel_edit", "Cancel", class_="btn-secondary"),
                         style="display: flex; gap: 10px;"
                     )
                 )
+            else:
+                # Show action buttons for single selection
+                return ui.div(
+                    ui.div(
+                        ui.input_action_button("delete_task", "Delete Task", class_="btn-danger"),
+                        ui.input_action_button("start_edit", "Edit Task", class_="btn-warning"),
+                        ui.input_action_button("move_up", "↑ Move Up", class_="btn-primary"),
+                        ui.input_action_button("move_down", "↓ Move Down", class_="btn-primary"),
+                        style="display: flex; gap: 10px; flex-wrap: wrap;"
+                    )
+                )
         else:
-            # Only show delete button for multiple selections
-            return delete_button
+            # Multiple items selected - only show delete button
+            return ui.div(
+                ui.div(
+                    ui.input_action_button("delete_task", "Delete Selected Tasks", class_="btn-danger"),
+                    style="display: flex; gap: 10px;"
+                )
+            )
+
+
+
+
+    
 
     @reactive.effect
     @reactive.event(input.move_tasks)
@@ -312,7 +323,7 @@ def server(input, output, session):
     # Add a reactive value for GitHub save status
     github_status = reactive.value("")
 
-    @output
+  
     @render.text
     def github_status_output():
         return github_status.get()
@@ -533,13 +544,7 @@ def server(input, output, session):
 
         except Exception as e:
             github_status.set(f"Error: {str(e)}")
-    
-    
-    
-    
-    
-    
-    
+
     @reactive.effect
     @reactive.event(input.save_github)
     def save_to_github():
@@ -547,7 +552,7 @@ def server(input, output, session):
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in all GitHub fields")
             return
-
+    
         try:
             # Prepare the data
             data = lists_data.get()
@@ -560,32 +565,27 @@ def server(input, output, session):
                     if desc.strip():
                         formatted_data += f"  Description: {desc}\n"
                 formatted_data += "\n"
-
+    
             # GitHub API endpoint
             repo = input.github_repo()
-            
             url = f"https://api.github.com/repos/{repo}/contents/{path}"
-
+    
             # Headers for authentication
             headers = {
                 "Authorization": f"token {input.github_token()}",
                 "Accept": "application/vnd.github.v3+json"
             }
-
+    
             # Check if file exists
             try:
                 response = requests.get(url, headers=headers)
-                if response.status_code == 200:
-                    # File exists, get the SHA
-                    sha = response.json()["sha"]
-                else:
-                    sha = None
+                sha = response.json()["sha"] if response.status_code == 200 else None
             except:
                 sha = None
-
+    
             # Prepare the content
             content = base64.b64encode(formatted_data.encode()).decode()
-
+    
             # Prepare the data for the API request
             data = {
                 "message": "Update task lists",
@@ -593,18 +593,31 @@ def server(input, output, session):
             }
             if sha:
                 data["sha"] = sha
-
+    
             # Make the API request
             response = requests.put(url, headers=headers, json=data)
-
+    
             if response.status_code in [200, 201]:
                 github_status.set("Successfully saved to GitHub!")
+                changes_unsaved.set(False)  # Reset the unsaved changes flag
             else:
                 github_status.set(f"Error saving to GitHub: {response.status_code}")
-
+    
         except Exception as e:
             github_status.set(f"Error: {str(e)}")
+        
+    
+    
+    
+    
+    
+    
+    
 
+
+
+
+    
     def load_list_names_from_github():
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in GitHub credentials to load list names")
@@ -739,7 +752,7 @@ def server(input, output, session):
  
     editing_names = reactive.value(False)
     
-    @output
+    
     @render.ui
     def list_name_controls():
         if not editing_names.get():
@@ -859,6 +872,23 @@ def server(input, output, session):
             github_status.set(f"Error saving list names: {str(e)}")
             return False
 
+   
+    @render.ui
+    def manual_save_button():
+        if not input.autosave_enabled() and changes_unsaved.get():
+            return ui.input_action_button(
+                "save_github",  # Changed from manual_save to save_github
+                "Save Changes to GitHub",
+                class_="btn-success"
+            )
+        return ui.div()
     
-
+   
+    @render.text
+    def unsaved_changes_alert():
+        if not input.autosave_enabled() and changes_unsaved.get():
+            return "⚠️ You have unsaved changes"
+        return ""
+    
+    
 app = App(app_ui, server)
