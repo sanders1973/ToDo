@@ -20,14 +20,23 @@ LIST_NAMES = {
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
-        ui.input_dark_mode(id=None, mode="dark"),
-        ui.input_switch("autosave_enabled", "Enable GitHub Auto-save", value=True),
-        ui.output_text("unsaved_changes_alert"),
-        ui.output_ui("manual_save_button"),
+        ui.accordion(
+            ui.accordion_panel(
+                "Settings",
+                ui.output_text("online_status"),
+                ui.input_dark_mode(id=None, mode="dark"),
+                ui.input_switch("autosave_enabled", "Enable GitHub Auto-save", value=True),
+                open=False  # This makes it start collapsed
+            ),
+            id="settings_accordion"
+        ),
+        
         ui.input_text("task", "Enter Task"),
         ui.input_text_area("description", "Enter Description", height="100px"),  # Changed this line
         ui.input_action_button("add", "Add Task", class_="btn-primary"),
-       # ui.hr(),
+        ui.output_text("unsaved_changes_alert"),
+        ui.output_ui("manual_save_button"),
+        # ui.hr(),
       #  ui.h4("Manage Tasks"),
         ui.output_ui("task_selector"),
       
@@ -92,9 +101,17 @@ def server(input, output, session):
     
     changes_unsaved = reactive.value(False)
     editing = reactive.value(False)
+        # Add these near the start of the server function with other reactive values
+    is_online = reactive.value(True)  # Track online status
+    pending_changes = reactive.value([])  # Queue of changes made while offline
     
 
-           
+    def check_online_status():
+        try:
+            requests.get("https://api.github.com", timeout=2)
+            return True
+        except (requests.ConnectionError, requests.Timeout):
+            return False       
 
     def get_current_list():
         return lists_data.get()[input.active_list()]
@@ -131,6 +148,12 @@ def server(input, output, session):
                 options
             )
         )
+
+    @render.text
+    def online_status():
+        if not is_online.get():
+            return "📴 Offline Mode - Changes will sync when online"
+        return "🌐 Online"
 
     
     @render.ui
@@ -407,6 +430,9 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(lists_data, input.autosave_enabled)
     def auto_save():
+        # Check online status first
+        is_online.set(check_online_status())
+        
         # If autosave was just disabled but there are no actual changes,
         # make sure changes_unsaved is False
         if not input.autosave_enabled() and not changes_unsaved.get():
@@ -424,18 +450,17 @@ def server(input, output, session):
             github_status.set("Please fill in GitHub credentials to enable auto-save")
             return
     
+        # If we're offline, queue the changes
+        if not is_online.get():
+            if changes_unsaved.get():
+                github_status.set("⚠️ Changes pending - Currently offline")
+                # Store the current state
+                pending_changes.set(pending_changes.get() + [lists_data.get()])
+            return
+
+        # Online save logic continues as before...
         path = "ToDoList.txt"
         try:
-            # First check if we can connect to GitHub
-            try:
-                test_url = "https://api.github.com"
-                requests.get(test_url, timeout=2)
-            except (requests.ConnectionError, requests.Timeout):
-                github_status.set("⚠️ Changes pending - Currently offline")
-                return
-
-
-            # If we're online, proceed with save
             # Prepare the data
             data = lists_data.get()
             formatted_data = ""
@@ -490,6 +515,25 @@ def server(input, output, session):
             github_status.set(f"❌ Error auto-saving: {str(e)}")
 
 
+
+    @reactive.effect
+    def handle_online_status():
+        # Periodically check online status
+        current_online_status = check_online_status()
+        is_online.set(current_online_status)
+        
+        # If we just came back online and have pending changes
+        if current_online_status and pending_changes.get():
+            try:
+                # Process pending changes
+                if input.autosave_enabled():
+                    # Trigger a save with the latest state
+                    lists_data.set(pending_changes.get()[-1])  # Use most recent change
+                    pending_changes.set([])  # Clear the queue
+                    github_status.set("✓ Syncing changes after coming back online...")
+            except Exception as e:
+                github_status.set(f"❌ Error syncing changes: {str(e)}")
+    
 
     @reactive.effect
     @reactive.event(input.quick_save)
