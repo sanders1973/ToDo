@@ -203,42 +203,54 @@ def server(input, output, session):
     @output
     @render.ui
     def edit_controls():
-        if not input.selected_tasks() or len(input.selected_tasks()) != 1:
+        if not input.selected_tasks():
             return ui.div()
         
-        if editing.get():
-            task_idx = int(input.selected_tasks()[0]) - 1
-            current_list = get_current_list()
-            
-            return ui.div(
-                #ui.hr(),
-                ui.h4("Edit Task"),
-                ui.input_text(
-                    "edit_task",
-                    "Task",
-                    value=current_list["tasks"][task_idx]
-                ),
-                ui.input_text_area(
-                    "edit_description",
-                    "Description",
-                    value=current_list["descriptions"][task_idx],
-                    height="100px"
-                ),
-                ui.input_action_button("save_edit", "Save", class_="btn-success"),
-                ui.input_action_button("cancel_edit", "Cancel", class_="btn-secondary"),
-            )
-        else:
-            return ui.div(
-                       # ui.hr(),
-                        ui.input_action_button("start_edit", "Edit Selected Task", class_="btn-warning"),
-                        ui.br(),
-                        ui.br(),
-                        ui.div(
-                            ui.input_action_button("move_up", "↑ Up", class_="btn-primary"),
-                            ui.input_action_button("move_down", "↓ Down", class_="btn-primary"),
-                            style="display: flex; gap: 10px;"
-                        )
+        # Delete button always shows if any tasks are selected
+        delete_button = ui.div(
+            ui.input_action_button("delete_task", "Delete Selected Tasks", class_="btn-danger"),
+            ui.br(),
+            ui.br()
+        )
+        
+        # Edit controls only show for single selection
+        if len(input.selected_tasks()) == 1:
+            if editing.get():
+                task_idx = int(input.selected_tasks()[0]) - 1
+                current_list = get_current_list()
+                
+                return ui.div(
+                    delete_button,
+                    ui.h4("Edit Task"),
+                    ui.input_text(
+                        "edit_task",
+                        "Task",
+                        value=current_list["tasks"][task_idx]
+                    ),
+                    ui.input_text_area(
+                        "edit_description",
+                        "Description",
+                        value=current_list["descriptions"][task_idx],
+                        height="100px"
+                    ),
+                    ui.input_action_button("save_edit", "Save", class_="btn-success"),
+                    ui.input_action_button("cancel_edit", "Cancel", class_="btn-secondary"),
+                )
+            else:
+                return ui.div(
+                    delete_button,
+                    ui.input_action_button("start_edit", "Edit Selected Task", class_="btn-warning"),
+                    ui.br(),
+                    ui.br(),
+                    ui.div(
+                        ui.input_action_button("move_up", "↑ Up", class_="btn-primary"),
+                        ui.input_action_button("move_down", "↓ Down", class_="btn-primary"),
+                        style="display: flex; gap: 10px;"
                     )
+                )
+        else:
+            # Only show delete button for multiple selections
+            return delete_button
 
     @reactive.effect
     @reactive.event(input.move_tasks)
@@ -365,7 +377,23 @@ def server(input, output, session):
             selected=[str(task_idx + 2)]  # Index is 0-based, but UI is 1-based
         )    
     
-    
+    @reactive.effect
+    @reactive.event(input.delete_task)
+    def delete_task():
+        if not input.selected_tasks():
+            return
+            
+        selected_indices = [int(idx) - 1 for idx in input.selected_tasks()]
+        current_data = lists_data.get().copy()
+        current_list = current_data[input.active_list()]
+        
+        # Remove tasks and descriptions in reverse order to maintain correct indices
+        for idx in sorted(selected_indices, reverse=True):
+            current_list["tasks"].pop(idx)
+            current_list["descriptions"].pop(idx)
+        
+        lists_data.set(current_data)
+        changes_unsaved.set(True)    
    
     
     @reactive.effect
