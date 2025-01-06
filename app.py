@@ -434,7 +434,7 @@ def server(input, output, session):
                 for task, desc in zip(list_content["tasks"], list_content["descriptions"]):
                     formatted_data += f"- {task}\n"
                     if desc.strip():
-                        formatted_data += f"  Description: {desc}\n"
+                        formatted_data += f"  |{desc}\n"
                 formatted_data += "\n"
 
             # GitHub API endpoint
@@ -498,7 +498,7 @@ def server(input, output, session):
                 for task, desc in zip(list_content["tasks"], list_content["descriptions"]):
                     formatted_data += f"- {task}\n"
                     if desc.strip():
-                        formatted_data += f"  Description: {desc}\n"
+                        formatted_data += f"  |{desc}\n"
                 formatted_data += "\n"
 
             # GitHub API endpoint
@@ -563,7 +563,7 @@ def server(input, output, session):
                 for task, desc in zip(list_content["tasks"], list_content["descriptions"]):
                     formatted_data += f"- {task}\n"
                     if desc.strip():
-                        formatted_data += f"  Description: {desc}\n"
+                        formatted_data += f"  |{desc}\n"
                 formatted_data += "\n"
     
             # GitHub API endpoint
@@ -734,8 +734,8 @@ def server(input, output, session):
                         desc = ""
                         if i + 1 < len(lines):
                             next_line = lines[i + 1]
-                            if next_line.startswith('  Description:'):
-                                desc = next_line[14:].strip()  # Remove '  Description: ' prefix
+                            if next_line.startswith('  |'):
+                                desc = next_line[3:].strip()  # Remove '  |' prefix
                                 i += 1  # Skip the description line
                         new_data[current_list_id]["descriptions"].append(desc)
                     
