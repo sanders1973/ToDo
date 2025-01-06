@@ -62,10 +62,7 @@ app_ui = ui.page_sidebar(
         ),
         style="margin-bottom: 0;"
     ),
-    ui.card(
     ui.output_ui("edit_controls"),
-    style="margin-bottom: 0;"
-    ),
     ui.output_ui("move_controls"),
   
     ui.card(
@@ -181,7 +178,7 @@ def server(input, output, session):
     @render.ui
     def move_controls():
         if not input.selected_tasks():
-            return ui.div()
+            return ui.div()  # Return empty div without a card when no tasks selected
             
         current_list_id = input.active_list()
         move_options = {k: v for k, v in LIST_NAMES.items() if k != current_list_id}
@@ -209,7 +206,7 @@ def server(input, output, session):
     @render.ui
     def edit_controls():
         if not input.selected_tasks():
-            return ui.div()
+            return ui.div()  # Return empty div without a card when no tasks selected
         
         # Show controls based on selection
         if len(input.selected_tasks()) == 1:
@@ -219,7 +216,7 @@ def server(input, output, session):
                 task_idx = int(input.selected_tasks()[0]) - 1
                 current_list = get_current_list()
                 
-                return ui.div(
+                return ui.card(  # Now wrap in card only when there's content
                     ui.h4("Edit Task"),
                     ui.input_text(
                         "edit_task",
@@ -240,7 +237,7 @@ def server(input, output, session):
                 )
             else:
                 # Show action buttons for single selection
-                return ui.div(
+                return ui.card(  # Now wrap in card only when there's content
                     ui.div(
                         ui.input_action_button("delete_task", "Delete Task", class_="btn-danger"),
                         ui.input_action_button("start_edit", "Edit Task", class_="btn-warning"),
@@ -251,7 +248,7 @@ def server(input, output, session):
                 )
         else:
             # Multiple items selected - only show delete button
-            return ui.div(
+            return ui.card(  # Now wrap in card only when there's content
                 ui.div(
                     ui.input_action_button("delete_task", "Delete Selected Tasks", class_="btn-danger"),
                     style="display: flex; gap: 10px;"
