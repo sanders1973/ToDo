@@ -408,12 +408,25 @@ def server(input, output, session):
    
     
     @reactive.effect
-    @reactive.event(lists_data)
+    @reactive.event(lists_data, input.autosave_enabled)
     def auto_save():
+        # If autosave was just disabled but there are no actual changes,
+        # make sure changes_unsaved is False
+        if not input.autosave_enabled() and not changes_unsaved.get():
+            return
+    
+        # If there are no changes, nothing to do
+        if not changes_unsaved.get():
+            return
+    
+        # If autosave is disabled, keep existing unsaved state
+        if not input.autosave_enabled():
+            return
+    
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in GitHub credentials to enable auto-save")
             return
-
+    
         path = "ToDoList.txt"
         try:
             # First check if we can connect to GitHub
@@ -423,6 +436,7 @@ def server(input, output, session):
             except (requests.ConnectionError, requests.Timeout):
                 github_status.set("⚠️ Changes pending - Currently offline")
                 return
+
 
             # If we're online, proceed with save
             # Prepare the data
