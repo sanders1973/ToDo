@@ -42,6 +42,7 @@ app_ui = ui.page_sidebar(
       
        # ui.hr(),
       #  ui.h4("Save to GitHub"),
+        ui.input_action_button("load_github", "Load from GitHub", class_="btn-info"),
         ui.input_text(
             "github_repo",
             "Repository (user/repo)",
@@ -54,7 +55,7 @@ app_ui = ui.page_sidebar(
             value=""
         ),
         ui.output_text("github_status_output"),
-        ui.input_action_button("load_github", "Load from GitHub", class_="btn-info"),
+        
       #  ui.hr(),
       #  ui.h4("List Settings"),
         ui.input_action_button("edit_list_names", "Edit List Names", class_="btn-secondary"),
