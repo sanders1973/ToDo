@@ -2,14 +2,14 @@ self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open('shiny-app-cache').then(function(cache) {
       return cache.addAll([
-        '/',
-        '/index.html',
-        '/shinylive/style-resets.css',
-        '/shinylive/shinylive.css',
-        '/shinylive/load-shinylive-sw.js',
-        '/shinylive/shinylive.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png'
+        '/docs/',
+        '/docs/index.html',
+        '/docs/shinylive/style-resets.css',
+        '/docs/shinylive/shinylive.css',
+        '/docs/shinylive/load-shinylive-sw.js',
+        '/docs/shinylive/shinylive.js',
+        '/docs/icons/icon-192x192.png',
+        '/docs/icons/icon-512x512.png'
       ]);
     })
   );
