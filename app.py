@@ -26,9 +26,10 @@ app_ui = ui.page_sidebar(
                 ui.output_text("online_status"),
                 ui.input_dark_mode(id=None, mode="dark"),
                 ui.input_switch("autosave_enabled", "Enable GitHub Auto-save", value=True),
-                open=False  # This makes it start collapsed
+                
             ),
-            id="settings_accordion"
+            id="settings_accordion",
+            open=False  # This makes it start collapsed
         ),
         
         ui.input_text("task", "Enter Task"),
@@ -63,31 +64,38 @@ app_ui = ui.page_sidebar(
         width=350
     ),
 
-    ui.card(
-        ui.input_radio_buttons(
-            "active_list",
+    ui.accordion(
+        ui.accordion_panel(
             "Working List (for adding/editing)",
-            LIST_NAMES,
-            inline=True
+            ui.input_radio_buttons(
+                "active_list",
+                "",  # Removed the label since it's now in the panel header
+                LIST_NAMES,
+                inline=True
+            ),
         ),
-        style="margin-bottom: 0;"
+        open=True,  # This makes it start collapsed
+        id="working_list_accordion",
     ),
+    
     ui.output_ui("edit_controls"),
     ui.output_ui("move_controls"),
   
-    ui.card(
-        ui.row(
-            ui.column(12,
+   ui.card(
+        ui.accordion(
+            ui.accordion_panel(
+                "Select Lists to Display",
                 ui.input_checkbox_group(
                     "display_lists",
-                    "Select Lists to Display",
+                    "",  # Removed label since it's now in the panel header
                     LIST_NAMES,
                     selected=["list1"],
                     inline=True
                 )
-            )
+            ),
+            open=True,  # Makes it start expanded
+            id="display_lists_accordion"
         ),
-       
         ui.output_ui("task_lists_display")
     )
 )
