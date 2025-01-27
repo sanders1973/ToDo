@@ -4,8 +4,6 @@ import base64
 import requests
 import os
 
-
-
 # Define the list names
 LIST_NAMES = {
     "list1": "List 1",
@@ -134,11 +132,12 @@ def server(input, output, session):
             current_data = lists_data.get().copy()
             current_list = current_data[input.active_list()]
             
-            current_list["tasks"].append(input.task())
-            current_list["descriptions"].append(input.description())
+            # Insert at the beginning instead of appending
+            current_list["tasks"].insert(0, input.task())
+            current_list["descriptions"].insert(0, input.description())
             
             lists_data.set(current_data)
-            changes_unsaved.set(True)  # Add this line
+            changes_unsaved.set(True)
             ui.update_text("task", value="")
             ui.update_text("description", value="")
 
@@ -312,9 +311,10 @@ def server(input, output, session):
         tasks_to_move = [source_list["tasks"][i] for i in selected_indices]
         descriptions_to_move = [source_list["descriptions"][i] for i in selected_indices]
         
-        # Add to target list
-        target_list["tasks"].extend(tasks_to_move)
-        target_list["descriptions"].extend(descriptions_to_move)
+        # Add to beginning of target list
+        for task, desc in zip(reversed(tasks_to_move), reversed(descriptions_to_move)):
+            target_list["tasks"].insert(0, task)
+            target_list["descriptions"].insert(0, desc)
         
         # Remove from source list (in reverse order to maintain indices)
         for i in sorted(selected_indices, reverse=True):
@@ -322,7 +322,7 @@ def server(input, output, session):
             source_list["descriptions"].pop(i)
         
         lists_data.set(current_data)
-        changes_unsaved.set(True)  # Add this line
+        changes_unsaved.set(True)
 
     @reactive.effect
     @reactive.event(input.start_edit)
@@ -794,7 +794,7 @@ def server(input, output, session):
                     # Check if this is a task
                     elif line.startswith('- ') and current_list_id:
                         task = line[2:]  # Remove the '- ' prefix
-                        new_data[current_list_id]["tasks"].append(task)
+                        new_data[current_list_id]["tasks"].insert(0, task)
                         
                         # Look ahead for description
                         desc = ""
@@ -803,7 +803,7 @@ def server(input, output, session):
                             if next_line.startswith('  |'):
                                 desc = next_line[3:].strip()  # Remove '  |' prefix
                                 i += 1  # Skip the description line
-                        new_data[current_list_id]["descriptions"].append(desc)
+                        new_data[current_list_id]["descriptions"].insert(0, desc)
                     
                     i += 1
 
