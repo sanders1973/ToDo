@@ -264,9 +264,12 @@ def server(input, output, session):
         showing_merge_dialog.set(False)
         merge_conflicts.set([])
         
-        # Save the resolved state
-        save_to_github(force=True)
-
+        # Update the last synced state after resolving conflicts
+        last_synced_state.set(merged_state)
+        
+        # Don't force the save, let it go through normal conflict detection
+        perform_github_save(force=False)
+        
     @reactive.effect
     @reactive.event(input.cancel_merge)
     def cancel_merge():
@@ -628,84 +631,165 @@ def server(input, output, session):
                 # Store the current state
                 pending_changes.set(pending_changes.get() + [lists_data.get()])
             return
-
-        # Online save logic continues as before...
+    
+        # Online save logic using the conflict management system
         path = "ToDoList.txt"
         try:
-            # Prepare the data
-            data = lists_data.get()
-            formatted_data = ""
-            for list_id, list_name in LIST_NAMES.items():
-                formatted_data += f"=== {list_name} ===\n"
-                list_content = data[list_id]
-                for task, desc in zip(list_content["tasks"], list_content["descriptions"]):
-                    formatted_data += f"- {task}\n"
-                    if desc.strip():
-                        formatted_data += f"  |{desc}\n"
-                formatted_data += "\n"
-
             # GitHub API endpoint
             repo = input.github_repo()
             url = f"https://api.github.com/repos/{repo}/contents/{path}"
-
-            # Headers for authentication
             headers = {
                 "Authorization": f"token {input.github_token()}",
                 "Accept": "application/vnd.github.v3+json"
             }
-
-            # Check if file exists
-            try:
-                response = requests.get(url, headers=headers)
-                sha = response.json()["sha"] if response.status_code == 200 else None
-            except:
-                sha = None
-
-            # Prepare the content
-            content = base64.b64encode(formatted_data.encode()).decode()
-
-            # Prepare the data for the API request
-            data = {
-                "message": "Auto-update task lists",
-                "content": content,
-            }
-            if sha:
-                data["sha"] = sha
-
-            # Make the API request
-            response = requests.put(url, headers=headers, json=data)
-
-            if response.status_code in [200, 201]:
-                github_status.set("✓ Changes saved automatically")
-            else:
-                github_status.set(f"❌ Error auto-saving: {response.status_code}")
-
+    
+            # Get current GitHub content
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                # Get current GitHub content
+                github_content = base64.b64decode(response.json()["content"]).decode()
+                github_state = parse_github_content(github_content)
+                
+                # Check for conflicts
+                if last_synced_state.get() is not None:
+                    # Check if GitHub content has changed since our last sync
+                    if github_state != last_synced_state.get():
+                        # Attempt to merge changes
+                        merged_state, conflicts = merge_states(
+                            lists_data.get(),
+                            github_state,
+                            last_synced_state.get()
+                        )
+                        
+                        if conflicts:
+                            # Show merge dialog and stop the auto-save process
+                            merge_conflicts.set(conflicts)
+                            showing_merge_dialog.set(True)
+                            github_status.set("Please resolve conflicts before saving")
+                            return
+                        
+                        # No conflicts, use merged state
+                        lists_data.set(merged_state)
+    
+                # Only continue if no conflicts are showing
+                if not showing_merge_dialog.get():
+                    formatted_data = format_data_for_github(lists_data.get())
+                    content = base64.b64encode(formatted_data.encode()).decode()
+    
+                    data = {
+                        "message": "Auto-update task lists",
+                        "content": content,
+                    }
+                    if response.status_code == 200:
+                        data["sha"] = response.json()["sha"]
+    
+                    # Make the API request
+                    response = requests.put(url, headers=headers, json=data)
+    
+                    if response.status_code in [200, 201]:
+                        github_status.set("✓ Changes saved automatically")
+                        changes_unsaved.set(False)
+                        # Update last synced state with the current state
+                        last_synced_state.set(lists_data.get())
+                    else:
+                        github_status.set(f"❌ Error auto-saving: {response.status_code}")
+    
         except requests.RequestException as e:
             github_status.set("⚠️ Changes pending - Network error")
         except Exception as e:
             github_status.set(f"❌ Error auto-saving: {str(e)}")
 
-
+    def perform_github_save(force=False):
+        """Non-reactive function to perform the actual GitHub save"""
+        path = "ToDoList.txt"
+        if not input.github_token() or not input.github_repo():
+            github_status.set("Please fill in all GitHub fields")
+            return
+    
+        try:
+            # GitHub API endpoint
+            repo = input.github_repo()
+            url = f"https://api.github.com/repos/{repo}/contents/{path}"
+            headers = {
+                "Authorization": f"token {input.github_token()}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+    
+            # Get current GitHub content
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                if not force:
+                    # Check for new conflicts
+                    github_content = base64.b64decode(response.json()["content"]).decode()
+                    github_state = parse_github_content(github_content)
+                    
+                    # Check if GitHub content has changed since our last sync
+                    if github_state != last_synced_state.get():
+                        # Attempt to merge changes
+                        merged_state, conflicts = merge_states(
+                            lists_data.get(),
+                            github_state,
+                            last_synced_state.get()
+                        )
+                        
+                        if conflicts:
+                            # Show merge dialog and stop the save process
+                            merge_conflicts.set(conflicts)
+                            showing_merge_dialog.set(True)
+                            github_status.set("Please resolve conflicts before saving")
+                            return
+    
+                # Continue with save if no conflicts or forcing
+                formatted_data = format_data_for_github(lists_data.get())
+                content = base64.b64encode(formatted_data.encode()).decode()
+    
+                data = {
+                    "message": "Update task lists",
+                    "content": content,
+                }
+                if response.status_code == 200:
+                    data["sha"] = response.json()["sha"]
+    
+                # Make the API request
+                response = requests.put(url, headers=headers, json=data)
+    
+                if response.status_code in [200, 201]:
+                    github_status.set("Successfully saved to GitHub!")
+                    changes_unsaved.set(False)
+                    # Update last synced state with the current state
+                    last_synced_state.set(lists_data.get())
+                else:
+                    github_status.set(f"Error saving to GitHub: {response.status_code}")
+    
+        except Exception as e:
+            github_status.set(f"Error: {str(e)}")
 
     @reactive.effect
-    def handle_online_status():
-        # Periodically check online status
-        current_online_status = check_online_status()
-        is_online.set(current_online_status)
+    @reactive.event(input.apply_merge)
+    def handle_merge_resolution():
+        conflicts = merge_conflicts.get()
+        current_state = lists_data.get()  # This has the user's current changes
         
-        # If we just came back online and have pending changes
-        if current_online_status and pending_changes.get():
-            try:
-                # Process pending changes
-                if input.autosave_enabled():
-                    # Trigger a save with the latest state
-                    lists_data.set(pending_changes.get()[-1])  # Use most recent change
-                    pending_changes.set([])  # Clear the queue
-                    github_status.set("✓ Syncing changes after coming back online...")
-            except Exception as e:
-                github_status.set(f"❌ Error syncing changes: {str(e)}")
+        for conflict in conflicts:
+            list_id = conflict['list_id']
+            choice = getattr(input, f"resolve_{list_id}")()
+            
+            if choice == "github":
+                # Only modify if they choose GitHub version
+                current_state[list_id] = conflict['github']
+            # If they choose local, do absolutely nothing - keep current_state as is
+        
+        # Update everything with the resolved state
+        lists_data.set(current_state)
+        showing_merge_dialog.set(False)
+        merge_conflicts.set([])
+        last_synced_state.set(current_state)
+        
+        # Save the final result
+        perform_github_save(force=True)
     
-
     @reactive.effect
     @reactive.event(input.quick_save)
     def handle_quick_save():
@@ -773,7 +857,7 @@ def server(input, output, session):
 
     @reactive.effect
     @reactive.event(input.save_github)
-    def save_to_github(force=False):
+    def save_to_github():
         path = "ToDoList.txt"
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in all GitHub fields")
@@ -796,47 +880,30 @@ def server(input, output, session):
                 github_content = base64.b64decode(response.json()["content"]).decode()
                 github_state = parse_github_content(github_content)
                 
-                # If we're not forcing the save, check for conflicts
-                if not force:
-                    # Attempt to merge changes
-                    merged_state, conflicts = merge_states(
-                        lists_data.get(),
-                        github_state,
-                        last_synced_state.get()
-                    )
-                    
-                    if conflicts:
-                        # Show merge dialog and stop the save process
-                        merge_conflicts.set(conflicts)
-                        showing_merge_dialog.set(True)
-                        github_status.set("Please resolve conflicts before saving")
-                        return
-                    
-                    # No conflicts, use merged state
-                    lists_data.set(merged_state)
+                # Check for conflicts
+                if last_synced_state.get() is not None:
+                    # Check if GitHub content has changed since our last sync
+                    if github_state != last_synced_state.get():
+                        # Attempt to merge changes
+                        merged_state, conflicts = merge_states(
+                            lists_data.get(),
+                            github_state,
+                            last_synced_state.get()
+                        )
+                        
+                        if conflicts:
+                            # Show merge dialog and stop the save process
+                            merge_conflicts.set(conflicts)
+                            showing_merge_dialog.set(True)
+                            github_status.set("Please resolve conflicts before saving")
+                            return
+                        
+                        # No conflicts, use merged state
+                        lists_data.set(merged_state)
     
-            # Only continue with save if we have no conflicts or are forcing the save
-            formatted_data = format_data_for_github(lists_data.get())
-            content = base64.b64encode(formatted_data.encode()).decode()
-    
-            data = {
-                "message": "Update task lists",
-                "content": content,
-            }
-            if response.status_code == 200:
-                data["sha"] = response.json()["sha"]
-    
-            # Make the API request
-            response = requests.put(url, headers=headers, json=data)
-    
-            if response.status_code in [200, 201]:
-                github_status.set("Successfully saved to GitHub!")
-                changes_unsaved.set(False)
-                # Update last synced state with the current state
-                last_synced_state.set(lists_data.get())
-            else:
-                github_status.set(f"Error saving to GitHub: {response.status_code}")
-    
+                # Perform the save
+                perform_github_save()
+
         except Exception as e:
             github_status.set(f"Error: {str(e)}")
 
