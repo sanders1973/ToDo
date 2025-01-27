@@ -17,6 +17,10 @@ shiny run
 shinylive export . docs
 ```
 
+..........rollback to put on top.  conflict simplify to just alert and give option to reload or save local
+
+
+
 `Note:` We output the website to `docs` to host on a Github Page
 
 
