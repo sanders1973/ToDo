@@ -56,7 +56,6 @@ app_ui = ui.page_sidebar(
             value=""
         ),
         ui.output_text("github_status_output"),
-        ui.output_ui("merge_dialog"),
         
       #  ui.hr(),
       #  ui.h4("List Settings"),
@@ -103,181 +102,19 @@ app_ui = ui.page_sidebar(
 
 
 def server(input, output, session):
-    # Create empty initial state with correct structure
-    initial_state = {
+    # Create a dictionary to store tasks and descriptions for each list
+    lists_data = reactive.value({
         list_id: {"tasks": [], "descriptions": []}
         for list_id in LIST_NAMES.keys()
-    }
+    })
     
-    # Initialize reactive values
-    lists_data = reactive.value(initial_state.copy())
-    last_synced_state = reactive.value(initial_state.copy())
     changes_unsaved = reactive.value(False)
     editing = reactive.value(False)
+        # Add these near the start of the server function with other reactive values
     is_online = reactive.value(True)  # Track online status
     pending_changes = reactive.value([])  # Queue of changes made while offline
-    merge_conflicts = reactive.value([])  # Store any merge conflicts
-    showing_merge_dialog = reactive.value(False)  # Control merge dialog visibility
+    
 
-    
-    
-    def detect_changes(current_lists, github_lists):
-        """Compare two states and return added/modified/deleted items"""
-        changes = {
-            'added': {},
-            'modified': {},
-            'deleted': {}
-        }
-        
-        for list_id in LIST_NAMES.keys():
-            current = current_lists.get(list_id, {'tasks': [], 'descriptions': []})
-            github = github_lists.get(list_id, {'tasks': [], 'descriptions': []})
-            
-            # Create sets of task+description tuples for comparison
-            current_set = set((t, d) for t, d in zip(current['tasks'], current['descriptions']))
-            github_set = set((t, d) for t, d in zip(github['tasks'], github['descriptions']))
-            
-            # Find differences
-            added = current_set - github_set
-            deleted = github_set - current_set
-            
-            if added:
-                changes['added'][list_id] = [{'task': t, 'desc': d} for t, d in added]
-            if deleted:
-                changes['deleted'][list_id] = [{'task': t, 'desc': d} for t, d in deleted]
-                
-        return changes
-
-    def merge_states(local_state, github_state, last_sync_state):
-        """Attempt to automatically merge changes between states"""
-        conflicts = []
-        merged_state = {list_id: {"tasks": [], "descriptions": []} for list_id in LIST_NAMES.keys()}
-        
-        for list_id in LIST_NAMES.keys():
-            local_list = local_state.get(list_id, {"tasks": [], "descriptions": []})
-            github_list = github_state.get(list_id, {"tasks": [], "descriptions": []})
-            last_sync_list = last_sync_state.get(list_id, {"tasks": [], "descriptions": []})
-            
-            # Convert to sets for comparison
-            local_set = set(zip(local_list["tasks"], local_list["descriptions"]))
-            github_set = set(zip(github_list["tasks"], github_list["descriptions"]))
-            last_sync_set = set(zip(last_sync_list["tasks"], last_sync_list["descriptions"]))
-            
-            # Check if either local or github has changes from last sync
-            local_changed = local_set != last_sync_set
-            github_changed = github_set != last_sync_set
-            
-            if local_changed and github_changed:
-                # Both changed - check if changes are different
-                if local_set != github_set:
-                    # Conflict detected
-                    conflicts.append({
-                        'list_id': list_id,
-                        'local': local_list,
-                        'github': github_list
-                    })
-                    # Keep local version in merged state for now
-                    merged_state[list_id] = local_list
-                else:
-                    # Both changed but to the same state
-                    merged_state[list_id] = local_list
-            elif local_changed:
-                # Only local changed
-                merged_state[list_id] = local_list
-            elif github_changed:
-                # Only github changed
-                merged_state[list_id] = github_list
-            else:
-                # No changes
-                merged_state[list_id] = local_list
-        
-        return merged_state, conflicts
-
-    @render.ui
-    def merge_dialog():
-        if not showing_merge_dialog.get() or not merge_conflicts.get():
-            return ui.div()
-        
-        conflicts = merge_conflicts.get()
-        
-        elements = []
-        for conflict in conflicts:
-            list_id = conflict['list_id']
-            elements.extend([
-                ui.h4(f"Conflict in {LIST_NAMES[list_id]}"),
-                ui.div(
-                    ui.div(
-                        ui.h5("Local Version:"),
-                        *[ui.p(f"• {task}") for task in conflict['local']['tasks']],
-                        style="flex: 1; padding: 10px; background-color: #f0f0f0;"
-                    ),
-                    ui.div(
-                        ui.h5("GitHub Version:"),
-                        *[ui.p(f"• {task}") for task in conflict['github']['tasks']],
-                        style="flex: 1; padding: 10px; background-color: #f0f0f0;"
-                    ),
-                    style="display: flex; gap: 20px;"
-                ),
-                ui.input_radio_buttons(
-                    f"resolve_{list_id}",
-                    "Choose version to keep:",
-                    {"local": "Keep Local Version", "github": "Keep GitHub Version"}
-                ),
-                ui.br()
-            ])
-        
-        elements.extend([
-            ui.div(
-                ui.input_action_button("apply_merge", "Apply Changes", class_="btn-primary"),
-                ui.input_action_button("cancel_merge", "Cancel", class_="btn-secondary"),
-                style="display: flex; gap: 10px;"
-            )
-        ])
-        
-        return ui.card(
-            *elements,
-            style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); \
-                   z-index: 1000; background: white; padding: 20px; \
-                   box-shadow: 0 4px 8px rgba(0,0,0,0.1); \
-                   max-height: 80vh; overflow-y: auto; min-width: 500px;"
-        )
-
-    
-   
-    
-    
-    @reactive.effect
-    @reactive.event(input.apply_merge)
-    def handle_merge_resolution():
-        conflicts = merge_conflicts.get()
-        merged_state = lists_data.get().copy()
-        
-        for conflict in conflicts:
-            list_id = conflict['list_id']
-            choice = getattr(input, f"resolve_{list_id}")()
-            if choice == "local":
-                merged_state[list_id] = conflict['local']
-            else:
-                merged_state[list_id] = conflict['github']
-        
-        lists_data.set(merged_state)
-        showing_merge_dialog.set(False)
-        merge_conflicts.set([])
-        
-        # Update the last synced state after resolving conflicts
-        last_synced_state.set(merged_state)
-        
-        # Don't force the save, let it go through normal conflict detection
-        perform_github_save(force=False)
-        
-    @reactive.effect
-    @reactive.event(input.cancel_merge)
-    def cancel_merge():
-        showing_merge_dialog.set(False)
-        merge_conflicts.set([])
-    
-    
-    
     def check_online_status():
         try:
             requests.get("https://api.github.com", timeout=2)
@@ -631,165 +468,84 @@ def server(input, output, session):
                 # Store the current state
                 pending_changes.set(pending_changes.get() + [lists_data.get()])
             return
-    
-        # Online save logic using the conflict management system
+
+        # Online save logic continues as before...
         path = "ToDoList.txt"
         try:
+            # Prepare the data
+            data = lists_data.get()
+            formatted_data = ""
+            for list_id, list_name in LIST_NAMES.items():
+                formatted_data += f"=== {list_name} ===\n"
+                list_content = data[list_id]
+                for task, desc in zip(list_content["tasks"], list_content["descriptions"]):
+                    formatted_data += f"- {task}\n"
+                    if desc.strip():
+                        formatted_data += f"  |{desc}\n"
+                formatted_data += "\n"
+
             # GitHub API endpoint
             repo = input.github_repo()
             url = f"https://api.github.com/repos/{repo}/contents/{path}"
+
+            # Headers for authentication
             headers = {
                 "Authorization": f"token {input.github_token()}",
                 "Accept": "application/vnd.github.v3+json"
             }
-    
-            # Get current GitHub content
-            response = requests.get(url, headers=headers)
-            
-            if response.status_code == 200:
-                # Get current GitHub content
-                github_content = base64.b64decode(response.json()["content"]).decode()
-                github_state = parse_github_content(github_content)
-                
-                # Check for conflicts
-                if last_synced_state.get() is not None:
-                    # Check if GitHub content has changed since our last sync
-                    if github_state != last_synced_state.get():
-                        # Attempt to merge changes
-                        merged_state, conflicts = merge_states(
-                            lists_data.get(),
-                            github_state,
-                            last_synced_state.get()
-                        )
-                        
-                        if conflicts:
-                            # Show merge dialog and stop the auto-save process
-                            merge_conflicts.set(conflicts)
-                            showing_merge_dialog.set(True)
-                            github_status.set("Please resolve conflicts before saving")
-                            return
-                        
-                        # No conflicts, use merged state
-                        lists_data.set(merged_state)
-    
-                # Only continue if no conflicts are showing
-                if not showing_merge_dialog.get():
-                    formatted_data = format_data_for_github(lists_data.get())
-                    content = base64.b64encode(formatted_data.encode()).decode()
-    
-                    data = {
-                        "message": "Auto-update task lists",
-                        "content": content,
-                    }
-                    if response.status_code == 200:
-                        data["sha"] = response.json()["sha"]
-    
-                    # Make the API request
-                    response = requests.put(url, headers=headers, json=data)
-    
-                    if response.status_code in [200, 201]:
-                        github_status.set("✓ Changes saved automatically")
-                        changes_unsaved.set(False)
-                        # Update last synced state with the current state
-                        last_synced_state.set(lists_data.get())
-                    else:
-                        github_status.set(f"❌ Error auto-saving: {response.status_code}")
-    
+
+            # Check if file exists
+            try:
+                response = requests.get(url, headers=headers)
+                sha = response.json()["sha"] if response.status_code == 200 else None
+            except:
+                sha = None
+
+            # Prepare the content
+            content = base64.b64encode(formatted_data.encode()).decode()
+
+            # Prepare the data for the API request
+            data = {
+                "message": "Auto-update task lists",
+                "content": content,
+            }
+            if sha:
+                data["sha"] = sha
+
+            # Make the API request
+            response = requests.put(url, headers=headers, json=data)
+
+            if response.status_code in [200, 201]:
+                github_status.set("✓ Changes saved automatically")
+            else:
+                github_status.set(f"❌ Error auto-saving: {response.status_code}")
+
         except requests.RequestException as e:
             github_status.set("⚠️ Changes pending - Network error")
         except Exception as e:
             github_status.set(f"❌ Error auto-saving: {str(e)}")
 
-    def perform_github_save(force=False):
-        """Non-reactive function to perform the actual GitHub save"""
-        path = "ToDoList.txt"
-        if not input.github_token() or not input.github_repo():
-            github_status.set("Please fill in all GitHub fields")
-            return
-    
-        try:
-            # GitHub API endpoint
-            repo = input.github_repo()
-            url = f"https://api.github.com/repos/{repo}/contents/{path}"
-            headers = {
-                "Authorization": f"token {input.github_token()}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-    
-            # Get current GitHub content
-            response = requests.get(url, headers=headers)
-            
-            if response.status_code == 200:
-                if not force:
-                    # Check for new conflicts
-                    github_content = base64.b64decode(response.json()["content"]).decode()
-                    github_state = parse_github_content(github_content)
-                    
-                    # Check if GitHub content has changed since our last sync
-                    if github_state != last_synced_state.get():
-                        # Attempt to merge changes
-                        merged_state, conflicts = merge_states(
-                            lists_data.get(),
-                            github_state,
-                            last_synced_state.get()
-                        )
-                        
-                        if conflicts:
-                            # Show merge dialog and stop the save process
-                            merge_conflicts.set(conflicts)
-                            showing_merge_dialog.set(True)
-                            github_status.set("Please resolve conflicts before saving")
-                            return
-    
-                # Continue with save if no conflicts or forcing
-                formatted_data = format_data_for_github(lists_data.get())
-                content = base64.b64encode(formatted_data.encode()).decode()
-    
-                data = {
-                    "message": "Update task lists",
-                    "content": content,
-                }
-                if response.status_code == 200:
-                    data["sha"] = response.json()["sha"]
-    
-                # Make the API request
-                response = requests.put(url, headers=headers, json=data)
-    
-                if response.status_code in [200, 201]:
-                    github_status.set("Successfully saved to GitHub!")
-                    changes_unsaved.set(False)
-                    # Update last synced state with the current state
-                    last_synced_state.set(lists_data.get())
-                else:
-                    github_status.set(f"Error saving to GitHub: {response.status_code}")
-    
-        except Exception as e:
-            github_status.set(f"Error: {str(e)}")
+
 
     @reactive.effect
-    @reactive.event(input.apply_merge)
-    def handle_merge_resolution():
-        conflicts = merge_conflicts.get()
-        current_state = lists_data.get()  # This has the user's current changes
+    def handle_online_status():
+        # Periodically check online status
+        current_online_status = check_online_status()
+        is_online.set(current_online_status)
         
-        for conflict in conflicts:
-            list_id = conflict['list_id']
-            choice = getattr(input, f"resolve_{list_id}")()
-            
-            if choice == "github":
-                # Only modify if they choose GitHub version
-                current_state[list_id] = conflict['github']
-            # If they choose local, do absolutely nothing - keep current_state as is
-        
-        # Update everything with the resolved state
-        lists_data.set(current_state)
-        showing_merge_dialog.set(False)
-        merge_conflicts.set([])
-        last_synced_state.set(current_state)
-        
-        # Save the final result
-        perform_github_save(force=True)
+        # If we just came back online and have pending changes
+        if current_online_status and pending_changes.get():
+            try:
+                # Process pending changes
+                if input.autosave_enabled():
+                    # Trigger a save with the latest state
+                    lists_data.set(pending_changes.get()[-1])  # Use most recent change
+                    pending_changes.set([])  # Clear the queue
+                    github_status.set("✓ Syncing changes after coming back online...")
+            except Exception as e:
+                github_status.set(f"❌ Error syncing changes: {str(e)}")
     
+
     @reactive.effect
     @reactive.event(input.quick_save)
     def handle_quick_save():
@@ -858,102 +614,63 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.save_github)
     def save_to_github():
-        path = "ToDoList.txt"
+        path= "ToDoList.txt"
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in all GitHub fields")
             return
     
         try:
+            # Prepare the data
+            data = lists_data.get()
+            formatted_data = ""
+            for list_id, list_name in LIST_NAMES.items():
+                formatted_data += f"=== {list_name} ===\n"
+                list_content = data[list_id]
+                for task, desc in zip(list_content["tasks"], list_content["descriptions"]):
+                    formatted_data += f"- {task}\n"
+                    if desc.strip():
+                        formatted_data += f"  |{desc}\n"
+                formatted_data += "\n"
+    
             # GitHub API endpoint
             repo = input.github_repo()
             url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    
+            # Headers for authentication
             headers = {
                 "Authorization": f"token {input.github_token()}",
                 "Accept": "application/vnd.github.v3+json"
             }
     
-            # Get current GitHub content
-            response = requests.get(url, headers=headers)
-            
-            if response.status_code == 200:
-                # Get current GitHub content
-                github_content = base64.b64decode(response.json()["content"]).decode()
-                github_state = parse_github_content(github_content)
-                
-                # Check for conflicts
-                if last_synced_state.get() is not None:
-                    # Check if GitHub content has changed since our last sync
-                    if github_state != last_synced_state.get():
-                        # Attempt to merge changes
-                        merged_state, conflicts = merge_states(
-                            lists_data.get(),
-                            github_state,
-                            last_synced_state.get()
-                        )
-                        
-                        if conflicts:
-                            # Show merge dialog and stop the save process
-                            merge_conflicts.set(conflicts)
-                            showing_merge_dialog.set(True)
-                            github_status.set("Please resolve conflicts before saving")
-                            return
-                        
-                        # No conflicts, use merged state
-                        lists_data.set(merged_state)
+            # Check if file exists
+            try:
+                response = requests.get(url, headers=headers)
+                sha = response.json()["sha"] if response.status_code == 200 else None
+            except:
+                sha = None
     
-                # Perform the save
-                perform_github_save()
-
+            # Prepare the content
+            content = base64.b64encode(formatted_data.encode()).decode()
+    
+            # Prepare the data for the API request
+            data = {
+                "message": "Update task lists",
+                "content": content,
+            }
+            if sha:
+                data["sha"] = sha
+    
+            # Make the API request
+            response = requests.put(url, headers=headers, json=data)
+    
+            if response.status_code in [200, 201]:
+                github_status.set("Successfully saved to GitHub!")
+                changes_unsaved.set(False)  # Reset the unsaved changes flag
+            else:
+                github_status.set(f"Error saving to GitHub: {response.status_code}")
+    
         except Exception as e:
             github_status.set(f"Error: {str(e)}")
-
-    def parse_github_content(content):
-        """Parse GitHub content into state structure"""
-        current_list_id = None
-        parsed_data = {list_id: {"tasks": [], "descriptions": []} 
-                    for list_id in LIST_NAMES.keys()}
-        
-        lines = [line.rstrip() for line in content.split('\n')]
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            if not line:
-                i += 1
-                continue
-                
-            if line.startswith('===') and line.endswith('==='):
-                list_name = line.strip('= ')
-                current_list_id = next(
-                    (k for k, v in LIST_NAMES.items() if v == list_name),
-                    None
-                )
-            elif line.startswith('- ') and current_list_id:
-                task = line[2:]
-                desc = ""
-                if i + 1 < len(lines):
-                    next_line = lines[i + 1]
-                    if next_line.startswith('  |'):
-                        desc = next_line[3:].strip()
-                        i += 1
-                parsed_data[current_list_id]["tasks"].append(task)
-                parsed_data[current_list_id]["descriptions"].append(desc)
-            
-            i += 1
-            
-        return parsed_data
-
-    def format_data_for_github(data):
-        """Format data structure for GitHub storage"""
-        formatted_data = ""
-        for list_id, list_name in LIST_NAMES.items():
-            formatted_data += f"=== {list_name} ===\n"
-            list_content = data[list_id]
-            for task, desc in zip(list_content["tasks"], list_content["descriptions"]):
-                formatted_data += f"- {task}\n"
-                if desc.strip():
-                    formatted_data += f"  |{desc}\n"
-            formatted_data += "\n"
-        return formatted_data
         
     
     
@@ -1089,11 +806,9 @@ def server(input, output, session):
                         new_data[current_list_id]["descriptions"].insert(0, desc)
                     
                     i += 1
-                
+
                 # Update the lists_data
                 lists_data.set(new_data)
-                # Update last synced state
-                last_synced_state.set(new_data)
                 github_status.set("Successfully loaded from GitHub!")
             else:
                 github_status.set(f"Error loading from GitHub: {response.status_code}")
@@ -1102,8 +817,8 @@ def server(input, output, session):
             github_status.set(f"Error loading: {str(e)}")
  
     editing_names = reactive.value(False)
-
-        
+    
+    
     @render.ui
     def list_name_controls():
         if not editing_names.get():
