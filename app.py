@@ -134,14 +134,14 @@ def server(input, output, session):
             current_data = lists_data.get().copy()
             current_list = current_data[input.active_list()]
             
-            current_list["tasks"].append(input.task())
-            current_list["descriptions"].append(input.description())
+            # Changed from append() to insert(0, ...)
+            current_list["tasks"].insert(0, input.task())
+            current_list["descriptions"].insert(0, input.description())
             
             lists_data.set(current_data)
-            changes_unsaved.set(True)  # Add this line
+            changes_unsaved.set(True)
             ui.update_text("task", value="")
-            ui.update_text("description", value="")
-
+        ui.update_text("description", value="")
     
     @render.ui
     def task_selector():
