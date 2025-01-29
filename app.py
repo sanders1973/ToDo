@@ -3,7 +3,7 @@ import json
 import base64
 import requests
 import os
-
+from datetime import datetime, timezone
 
 
 # Define the list names
@@ -82,6 +82,7 @@ app_ui = ui.page_sidebar(
     
     ui.output_ui("edit_controls"),
     ui.output_ui("move_controls"),
+    ui.output_ui("conflict_dialog"),
   
    ui.card(
         ui.accordion(
@@ -115,8 +116,88 @@ def server(input, output, session):
         # Add these near the start of the server function with other reactive values
     is_online = reactive.value(True)  # Track online status
     pending_changes = reactive.value([])  # Queue of changes made while offline
-    
+    loaded_file_timestamp = reactive.value("")
+    showing_conflict_dialog = reactive.value(False)
 
+   
+    def format_metadata(timestamp):
+        return f"--- METADATA ---\nLast updated: {timestamp}\n--- END METADATA ---\n\n"
+    
+    def extract_metadata(content):
+        if "--- METADATA ---" not in content:
+            return ""  # Return empty string instead of None
+        try:
+            timestamp_line = content.split("--- METADATA ---")[1].split("--- END METADATA ---")[0]
+            timestamp = timestamp_line.split("Last updated: ")[1].strip()
+            return timestamp if timestamp else ""  # Return empty string if timestamp is empty
+        except:
+            return ""  # Return empty string on any error
+    
+    def check_for_conflicts():
+        if not input.github_token() or not input.github_repo():
+            return False
+        
+        try:
+            # GitHub API endpoint
+            repo = input.github_repo()
+            path = "ToDoList.txt"
+            url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    
+            # Headers for authentication
+            headers = {
+                "Authorization": f"token {input.github_token()}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+    
+            # Get the file content
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                # Decode content from base64
+                content = base64.b64decode(response.json()["content"]).decode()
+                github_timestamp = extract_metadata(content)
+                stored_timestamp = loaded_file_timestamp.get()
+                
+                print(f"Current GitHub timestamp: {github_timestamp}")
+                print(f"Stored local timestamp: {stored_timestamp}")
+                
+                # Only detect conflict if both timestamps exist and are different
+                if github_timestamp and stored_timestamp and github_timestamp != stored_timestamp:
+                    print("Conflict detected!")
+                    return True
+                print("No conflict detected")
+            return False
+        except Exception as e:
+            print(f"Error in check_for_conflicts: {str(e)}")
+            return False
+    
+    @render.ui
+    def conflict_dialog():
+        if not showing_conflict_dialog.get():
+            return ui.div()
+        
+        return ui.card(
+            ui.h3("Conflict Detected!", style="color: red;"),
+            ui.p("The file on GitHub has been modified since you last loaded it."),
+            ui.p("What would you like to do?"),
+            ui.div(
+                ui.input_action_button("resolve_conflict_overwrite", "Overwrite GitHub Version", class_="btn-warning"),
+                ui.input_action_button("resolve_conflict_reload", "Reload from GitHub", class_="btn-info"),
+                style="display: flex; gap: 10px;"
+            )
+        )
+    
+    @reactive.effect
+    @reactive.event(input.resolve_conflict_overwrite)
+    def handle_conflict_overwrite():
+        showing_conflict_dialog.set(False)
+        # Force save without checking conflicts
+        save_to_github(force=True)
+    
+    
+    
+    
+    
     def check_online_status():
         try:
             requests.get("https://api.github.com", timeout=2)
@@ -437,7 +518,6 @@ def server(input, output, session):
         lists_data.set(current_data)
         changes_unsaved.set(True)    
    
-    
     @reactive.effect
     @reactive.event(lists_data, input.autosave_enabled)
     def auto_save():
@@ -468,13 +548,42 @@ def server(input, output, session):
                 # Store the current state
                 pending_changes.set(pending_changes.get() + [lists_data.get()])
             return
-
-        # Online save logic continues as before...
+    
+        # Check for conflicts first, before creating new timestamp
         path = "ToDoList.txt"
         try:
-            # Prepare the data
+            # GitHub API endpoint
+            repo = input.github_repo()
+            url = f"https://api.github.com/repos/{repo}/contents/{path}"
+            headers = {
+                "Authorization": f"token {input.github_token()}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            
+            # Get current GitHub content
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                content = base64.b64decode(response.json()["content"]).decode()
+                github_timestamp = extract_metadata(content)
+                stored_timestamp = loaded_file_timestamp.get()
+                
+                print(f"Auto-save - GitHub timestamp: {github_timestamp}")
+                print(f"Auto-save - Local timestamp: {stored_timestamp}")
+                
+                if github_timestamp != stored_timestamp:
+                    print("Auto-save - Conflict detected!")
+                    showing_conflict_dialog.set(True)
+                    return
+        except Exception as e:
+            print(f"Auto-save - Error checking conflicts: {str(e)}")
+            return
+    
+        try:
+            # Now proceed with save
             data = lists_data.get()
-            formatted_data = ""
+            current_timestamp = datetime.now(timezone.utc).isoformat()
+            formatted_data = format_metadata(current_timestamp)
+            
             for list_id, list_name in LIST_NAMES.items():
                 formatted_data += f"=== {list_name} ===\n"
                 list_content = data[list_id]
@@ -483,27 +592,17 @@ def server(input, output, session):
                     if desc.strip():
                         formatted_data += f"  |{desc}\n"
                 formatted_data += "\n"
-
-            # GitHub API endpoint
-            repo = input.github_repo()
-            url = f"https://api.github.com/repos/{repo}/contents/{path}"
-
-            # Headers for authentication
-            headers = {
-                "Authorization": f"token {input.github_token()}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-
-            # Check if file exists
+    
+            # Check if file exists and get its SHA
             try:
                 response = requests.get(url, headers=headers)
                 sha = response.json()["sha"] if response.status_code == 200 else None
             except:
                 sha = None
-
+    
             # Prepare the content
             content = base64.b64encode(formatted_data.encode()).decode()
-
+    
             # Prepare the data for the API request
             data = {
                 "message": "Auto-update task lists",
@@ -511,20 +610,21 @@ def server(input, output, session):
             }
             if sha:
                 data["sha"] = sha
-
+    
             # Make the API request
             response = requests.put(url, headers=headers, json=data)
-
+    
             if response.status_code in [200, 201]:
                 github_status.set("✓ Changes saved automatically")
+                changes_unsaved.set(False)
+                loaded_file_timestamp.set(str(current_timestamp))
             else:
                 github_status.set(f"❌ Error auto-saving: {response.status_code}")
-
+    
         except requests.RequestException as e:
             github_status.set("⚠️ Changes pending - Network error")
         except Exception as e:
             github_status.set(f"❌ Error auto-saving: {str(e)}")
-
 
 
     @reactive.effect
@@ -545,19 +645,48 @@ def server(input, output, session):
             except Exception as e:
                 github_status.set(f"❌ Error syncing changes: {str(e)}")
     
-
     @reactive.effect
     @reactive.event(input.quick_save)
     def handle_quick_save():
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in GitHub credentials in the sidebar first")
             return
-
+    
+        # Check for conflicts first, before creating new timestamp
         path = "ToDoList.txt"
         try:
-            # Prepare the data
+            # GitHub API endpoint
+            repo = input.github_repo()
+            url = f"https://api.github.com/repos/{repo}/contents/{path}"
+            headers = {
+                "Authorization": f"token {input.github_token()}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            
+            # Get current GitHub content
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                content = base64.b64decode(response.json()["content"]).decode()
+                github_timestamp = extract_metadata(content)
+                stored_timestamp = loaded_file_timestamp.get()
+                
+                print(f"Quick save - GitHub timestamp: {github_timestamp}")
+                print(f"Quick save - Local timestamp: {stored_timestamp}")
+                
+                if github_timestamp != stored_timestamp:
+                    print("Quick save - Conflict detected!")
+                    showing_conflict_dialog.set(True)
+                    return
+        except Exception as e:
+            print(f"Quick save - Error checking conflicts: {str(e)}")
+            return
+    
+        try:
+            # Now proceed with save
             data = lists_data.get()
-            formatted_data = ""
+            current_timestamp = datetime.now(timezone.utc).isoformat()
+            formatted_data = format_metadata(current_timestamp)
+            
             for list_id, list_name in LIST_NAMES.items():
                 formatted_data += f"=== {list_name} ===\n"
                 list_content = data[list_id]
@@ -566,63 +695,80 @@ def server(input, output, session):
                     if desc.strip():
                         formatted_data += f"  |{desc}\n"
                 formatted_data += "\n"
-
-            # GitHub API endpoint
-            repo = input.github_repo()
-            url = f"https://api.github.com/repos/{repo}/contents/{path}"
-
-            # Headers for authentication
-            headers = {
-                "Authorization": f"token {input.github_token()}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-
-            # Check if file exists
+    
+            # Check if file exists and get its SHA
             try:
                 response = requests.get(url, headers=headers)
-                if response.status_code == 200:
-                    # File exists, get the SHA
-                    sha = response.json()["sha"]
-                else:
-                    sha = None
+                sha = response.json()["sha"] if response.status_code == 200 else None
             except:
                 sha = None
-
+    
             # Prepare the content
             content = base64.b64encode(formatted_data.encode()).decode()
-
+    
             # Prepare the data for the API request
             data = {
-                "message": "Update task lists",
+                "message": "Quick update task lists",
                 "content": content,
             }
             if sha:
                 data["sha"] = sha
-
+    
             # Make the API request
             response = requests.put(url, headers=headers, json=data)
-
+    
             if response.status_code in [200, 201]:
                 github_status.set("Successfully saved to GitHub!")
                 changes_unsaved.set(False)
+                loaded_file_timestamp.set(str(current_timestamp))
             else:
                 github_status.set(f"Error saving to GitHub: {response.status_code}")
-
+    
         except Exception as e:
             github_status.set(f"Error: {str(e)}")
 
-    @reactive.effect
-    @reactive.event(input.save_github)
-    def save_to_github():
-        path= "ToDoList.txt"
+    
+    def save_to_github(force=False):
+        path = "ToDoList.txt"
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in all GitHub fields")
             return
     
+        # Check for conflicts first, before creating new timestamp
+        if not force:
+            try:
+                # GitHub API endpoint
+                repo = input.github_repo()
+                url = f"https://api.github.com/repos/{repo}/contents/{path}"
+                headers = {
+                    "Authorization": f"token {input.github_token()}",
+                    "Accept": "application/vnd.github.v3+json"
+                }
+                
+                # Get current GitHub content
+                response = requests.get(url, headers=headers)
+                if response.status_code == 200:
+                    content = base64.b64decode(response.json()["content"]).decode()
+                    github_timestamp = extract_metadata(content)
+                    stored_timestamp = loaded_file_timestamp.get()
+                    
+                    print(f"GitHub timestamp: {github_timestamp}")
+                    print(f"Local timestamp: {stored_timestamp}")
+                    
+                    if github_timestamp != stored_timestamp:
+                        print("Conflict detected!")
+                        showing_conflict_dialog.set(True)
+                        return
+            except Exception as e:
+                print(f"Error checking conflicts: {str(e)}")
+                return
+    
         try:
-            # Prepare the data
+            # Now proceed with save
             data = lists_data.get()
-            formatted_data = ""
+            current_timestamp = datetime.now(timezone.utc).isoformat()
+            formatted_data = format_metadata(current_timestamp)
+            
             for list_id, list_name in LIST_NAMES.items():
                 formatted_data += f"=== {list_name} ===\n"
                 list_content = data[list_id]
@@ -642,7 +788,7 @@ def server(input, output, session):
                 "Accept": "application/vnd.github.v3+json"
             }
     
-            # Check if file exists
+            # Check if file exists and get its SHA
             try:
                 response = requests.get(url, headers=headers)
                 sha = response.json()["sha"] if response.status_code == 200 else None
@@ -665,15 +811,14 @@ def server(input, output, session):
     
             if response.status_code in [200, 201]:
                 github_status.set("Successfully saved to GitHub!")
-                changes_unsaved.set(False)  # Reset the unsaved changes flag
+                changes_unsaved.set(False)
+                # Store the timestamp as string
+                loaded_file_timestamp.set(str(current_timestamp))
             else:
                 github_status.set(f"Error saving to GitHub: {response.status_code}")
     
         except Exception as e:
             github_status.set(f"Error: {str(e)}")
-        
-    
-    
     
     
     
@@ -740,9 +885,7 @@ def server(input, output, session):
             github_status.set(f"Error loading list names: {str(e)}")
             return False    
 
-    @reactive.effect
-    @reactive.event(input.load_github)      
-    def load_from_github():        
+    def perform_load_from_github():        
         # First load the list names
         if not load_list_names_from_github():
             return
@@ -751,24 +894,33 @@ def server(input, output, session):
         if not input.github_token() or not input.github_repo():
             github_status.set("Please fill in all GitHub fields")
             return
-
+    
         try:
             # GitHub API endpoint
             repo = input.github_repo()
             url = f"https://api.github.com/repos/{repo}/contents/{path}"
-
+    
             # Headers for authentication
             headers = {
                 "Authorization": f"token {input.github_token()}",
                 "Accept": "application/vnd.github.v3+json"
             }
-
+    
             # Get the file content
             response = requests.get(url, headers=headers)
             
             if response.status_code == 200:
                 # Decode content from base64
                 content = base64.b64decode(response.json()["content"]).decode()
+                
+                # Extract and store timestamp
+                timestamp = extract_metadata(content)
+                print(f"Loading file with timestamp: {timestamp}")
+                loaded_file_timestamp.set(str(timestamp))  # Ensure it's stored as string
+                
+                # Remove metadata section before parsing
+                if "--- END METADATA ---" in content:
+                    content = content.split("--- END METADATA ---")[1].strip()
                 
                 # Parse the content
                 current_list_id = None
@@ -806,15 +958,30 @@ def server(input, output, session):
                         new_data[current_list_id]["descriptions"].append(desc)
                     
                     i += 1
-
+    
                 # Update the lists_data
                 lists_data.set(new_data)
+                changes_unsaved.set(False)  # Reset unsaved changes flag
+                showing_conflict_dialog.set(False)  # Hide conflict dialog if it was showing
                 github_status.set("Successfully loaded from GitHub!")
             else:
                 github_status.set(f"Error loading from GitHub: {response.status_code}")
-
+    
         except Exception as e:
             github_status.set(f"Error loading: {str(e)}")
+    
+    @reactive.effect
+    @reactive.event(input.load_github)      
+    def load_from_github():
+        perform_load_from_github()
+    
+    @reactive.effect
+    @reactive.event(input.resolve_conflict_reload)
+    def handle_conflict_reload():
+        showing_conflict_dialog.set(False)
+        perform_load_from_github()
+
+    
  
     editing_names = reactive.value(False)
     
