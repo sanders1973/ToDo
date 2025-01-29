@@ -20,89 +20,144 @@ LIST_NAMES = {
     "list10": "List 10"
 }
 
-app_ui = ui.page_sidebar(
-    ui.sidebar(
-        ui.accordion(
-            ui.accordion_panel(
-                "Settings",
-                ui.output_text("online_status"),
-                ui.input_dark_mode(id=None, mode="dark"),
-                ui.input_switch("autosave_enabled", "Enable GitHub Auto-save", value=True),
-                
+app_ui = ui.page_fillable(
+        ui.tags.style("""
+        .draggable-task:hover {
+            background-color: #f8f9fa;
+        }
+        .droppable-list.drag-over {
+            border: 2px dashed #007bff !important;
+        }
+        .draggable-task {
+            transition: background-color 0.2s;
+        }
+        .droppable-list {
+            transition: border 0.2s;
+        }
+        .draggable-task {
+            cursor: move;
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .droppable-list {
+            height: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px dashed #ccc;
+            border-radius: 4px;
+        }
+        /* New styles for control panels */
+        .control-panel {
+            overflow: visible !important;
+            height: auto !important;
+            min-height: auto !important;
+        }
+        .control-panel .card-body {
+            overflow: visible !important;
+            padding: 15px;
+        }
+        .button-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 5px;
+        }
+        .move-controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+    """),
+    ui.layout_sidebar(
+        ui.sidebar(
+            ui.accordion(
+                ui.accordion_panel(
+                    "Settings",
+                    ui.output_text("online_status"),
+                    ui.input_dark_mode(id=None, mode="dark"),
+                    ui.input_switch("autosave_enabled", "Enable GitHub Auto-save", value=True),
+                ),
+                id="settings_accordion",
+                open=False
             ),
-            id="settings_accordion",
-            open=False  # This makes it start collapsed
+            
+            ui.input_text("task", "Enter Task"),
+            ui.input_text_area("description", "Enter Description", height="100px"),
+            ui.input_action_button("add", "Add Task", class_="btn-primary"),
+            ui.output_text("unsaved_changes_alert"),
+            ui.output_ui("manual_save_button"),
+            ui.output_ui("task_selector"),
+            
+            ui.input_action_button("load_github", "Load from GitHub", class_="btn-info"),
+            ui.input_text(
+                "github_repo",
+                "Repository (user/repo)",
+                value="",
+                autocomplete="username/rep"
+            ),
+            ui.input_password(
+                "github_token",
+                "Github Token",
+                value=""
+            ),
+            ui.output_text("github_status_output"),
+            
+            ui.input_action_button("edit_list_names", "Edit List Names", class_="btn-secondary"),
+            ui.output_ui("list_name_controls"),
+            width=350
         ),
-        
-        ui.input_text("task", "Enter Task"),
-        ui.input_text_area("description", "Enter Description", height="100px"),  # Changed this line
-        ui.input_action_button("add", "Add Task", class_="btn-primary"),
-        ui.output_text("unsaved_changes_alert"),
-        ui.output_ui("manual_save_button"),
-        # ui.hr(),
-      #  ui.h4("Manage Tasks"),
-        ui.output_ui("task_selector"),
-      
-       # ui.hr(),
-      #  ui.h4("Save to GitHub"),
-        ui.input_action_button("load_github", "Load from GitHub", class_="btn-info"),
-        ui.input_text(
-            "github_repo",
-            "Repository (user/repo)",
-            value="",
-            autocomplete="username/rep"
-        ),
-        ui.input_password(
-            "github_token",
-            "Github Token",
-            value=""
-        ),
-        ui.output_text("github_status_output"),
-        
-      #  ui.hr(),
-      #  ui.h4("List Settings"),
-        ui.input_action_button("edit_list_names", "Edit List Names", class_="btn-secondary"),
-        ui.output_ui("list_name_controls"),
-        width=350
-    ),
 
-    ui.accordion(
-        ui.accordion_panel(
-            "Working List (for adding/editing)",
-            ui.input_radio_buttons(
-                "active_list",
-                "",  # Removed the label since it's now in the panel header
-                LIST_NAMES,
-                inline=True
-            ),
-        ),
-        open=True,  # This makes it start collapsed
-        id="working_list_accordion",
-    ),
-    
-    ui.output_ui("edit_controls"),
-    ui.output_ui("move_controls"),
-    ui.output_ui("conflict_dialog"),
-  
-   ui.card(
+        # Main content starts here
         ui.accordion(
             ui.accordion_panel(
-                "Select Lists to Display",
-                ui.input_checkbox_group(
-                    "display_lists",
-                    "",  # Removed label since it's now in the panel header
+                "Working List (for adding/editing)",
+                ui.input_radio_buttons(
+                    "active_list",
+                    "",
                     LIST_NAMES,
-                    selected=["list1"],
                     inline=True
-                )
+                ),
             ),
-            open=True,  # Makes it start expanded
-            id="display_lists_accordion"
+            open=True,
+            id="working_list_accordion",
         ),
-        ui.output_ui("task_lists_display")
+        
+        ui.div(
+        {"style": "display: flex; flex-direction: column; gap: 10px; height: 100%;"},
+        ui.div(
+            {"style": "flex: 0 0 auto;"},  # This div won't grow or shrink
+            ui.output_ui("edit_controls"),
+            ui.output_ui("move_controls"),
+            ui.output_ui("conflict_dialog"),
+        ),
+        ui.div(
+            {"style": "flex: 1 1 auto; min-height: 0;"},  # This div will take remaining space
+            ui.card(
+                ui.accordion(
+                    ui.accordion_panel(
+                        "Select Lists to Display",
+                        ui.input_checkbox_group(
+                            "display_lists",
+                            "",
+                            LIST_NAMES,
+                            selected=["list1"],
+                            inline=True
+                        )
+                    ),
+                    open=True,
+                    id="display_lists_accordion"
+                ),
+                ui.input_switch("use_drag_drop", "Enable drag and drop view", value=False),
+                ui.output_ui("task_lists_display"),
+                full_screen=True
+            )
+        )
+    )
     )
 )
-
 
 def server(input, output, session):
     # Create a dictionary to store tasks and descriptions for each list
@@ -257,81 +312,222 @@ def server(input, output, session):
         col_width = 12 // len(selected_lists)
         col_width = max(3, min(12, col_width))
         
-        columns = []
-        for list_id in selected_lists:
-            current_list = lists_data.get()[list_id]
-            current_tasks = current_list["tasks"]
-            current_descriptions = current_list["descriptions"]
-            
-            task_items = []
-            task_items.append(ui.h3(LIST_NAMES[list_id]))
-            
-            if not current_tasks:
-                task_items.append(ui.p("No tasks in this list"))
-            else:
-                for i, (task, desc) in enumerate(zip(current_tasks, current_descriptions), 1):
-                    desc_paragraphs = [ui.p(p, style="text-indent:50px") for p in desc.split('\n')]
-                    task_html = ui.div(
-                        ui.h5(f"• {task}"),
-                        *desc_paragraphs,
-                        style="margin-bottom: 0;"
-                    )
-                    task_items.append(task_html)
+        if not input.use_drag_drop():
+            # Original markdown view
+            columns = []
+            for list_id in selected_lists:
+                current_list = lists_data.get()[list_id]
+                current_tasks = current_list["tasks"]
+                current_descriptions = current_list["descriptions"]
                 
-            column = ui.column(
-                col_width,
-                ui.card(
-                    *task_items,
-                    style="height: 100%;"
+                task_items = []
+                task_items.append(ui.h3(LIST_NAMES[list_id]))
+                
+                if not current_tasks:
+                    task_items.append(ui.p("No tasks in this list"))
+                else:
+                    for i, (task, desc) in enumerate(zip(current_tasks, current_descriptions), 1):
+                        desc_paragraphs = [ui.p(p, style="text-indent:50px") for p in desc.split('\n')]
+                        task_html = ui.div(
+                            ui.h5(f"• {task}"),
+                            *desc_paragraphs,
+                            style="margin-bottom: 0;"
+                        )
+                        task_items.append(task_html)
+                
+                column = ui.column(
+                    col_width,
+                    ui.card(
+                        *task_items,
+                        style="height: 100%;"
+                    )
                 )
+                columns.append(column)
+            
+            return ui.row(*columns)
+        else:
+            # Drag and drop view
+            columns = []
+            for list_id in selected_lists:
+                current_list = lists_data.get()[list_id]
+                current_tasks = current_list["tasks"]
+                current_descriptions = current_list["descriptions"]
+                
+                task_items = []
+                
+                if not current_tasks:
+                    task_items.append(ui.p("No tasks in this list"))
+                else:
+                    for i, (task, desc) in enumerate(zip(current_tasks, current_descriptions)):
+                        task_html = ui.div(
+                            {"draggable": "true",
+                             "data-task-id": f"{list_id}-{i}",
+                             "data-list-id": list_id,
+                             "data-task-index": str(i),
+                             "ondragstart": "handleDragStart(event)",
+                             "ondragover": "handleDragOver(event)",
+                             "ondrop": "handleDrop(event)",
+                             "class": "draggable-task"},
+                            ui.h5(task),
+                            ui.p(desc) if desc else "",
+                            style="cursor: move; padding: 10px; margin: 5px; border: 1px solid #ddd; border-radius: 4px;"
+                        )
+                        task_items.append(task_html)
+                
+                column = ui.column(
+                    col_width,
+                    ui.div(
+                        {"data-list-id": list_id,
+                         "class": "droppable-list",
+                         "ondragover": "handleDragOver(event)",
+                         "ondrop": "handleDrop(event)"},
+                        ui.h3(LIST_NAMES[list_id]),
+                        *task_items,
+                        style="height: 100%; min-height: 100px; padding: 10px; border: 1px dashed #ccc; border-radius: 4px;"
+                    )
+                )
+                columns.append(column)
+            
+            # Add required JavaScript
+            script = """
+            function handleDragStart(event) {
+                event.dataTransfer.setData('text/plain', 
+                    JSON.stringify({
+                        taskId: event.target.dataset.taskId,
+                        listId: event.target.dataset.listId,
+                        taskIndex: event.target.dataset.taskIndex
+                    })
+                );
+            }
+            
+            function handleDragOver(event) {
+                event.preventDefault();
+            }
+            
+            function handleDrop(event) {
+                event.preventDefault();
+                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                
+                // Get target list and position
+                let targetElement = event.target;
+                while (targetElement && !targetElement.classList.contains('droppable-list') &&
+                       !targetElement.classList.contains('draggable-task')) {
+                    targetElement = targetElement.parentElement;
+                }
+                
+                if (!targetElement) return;
+                
+                const targetListId = targetElement.dataset.listId;
+                let targetIndex = -1;
+                
+                if (targetElement.classList.contains('draggable-task')) {
+                    targetIndex = parseInt(targetElement.dataset.taskIndex);
+                }
+                
+                // Send move information to Shiny
+                const moveInfo = {
+                    sourceListId: data.listId,
+                    sourceIndex: parseInt(data.taskIndex),
+                    targetListId: targetListId,
+                    targetIndex: targetIndex
+                };
+                
+                Shiny.setInputValue('drag_drop_move', moveInfo);
+            }
+            """
+            
+            return ui.tags.div(
+                ui.tags.script(script),
+                ui.row(*columns)
             )
-            columns.append(column)
-        
-        return ui.row(*columns)
 
-    
     @render.ui
     def move_controls():
         if not input.selected_tasks():
-            return ui.div()  # Return empty div without a card when no tasks selected
+            return ui.div()
             
         current_list_id = input.active_list()
         move_options = {k: v for k, v in LIST_NAMES.items() if k != current_list_id}
         
         return ui.card(
+            {"class": "control-panel"},
             ui.div(
-                ui.div(
-                    ui.input_radio_buttons(
-                        "move_to_list",
-                        "Move selected tasks to:",
-                        move_options,
-                        inline=True
-                    ),
-                    ui.input_action_button(
-                        "move_tasks", 
-                        "Move Tasks", 
-                        class_="btn-info"
-                    ),
-                    style="display: flex; align-items: center; gap: 0;"
+                {"class": "move-controls"},
+                ui.input_radio_buttons(
+                    "move_to_list",
+                    "Move selected tasks to:",
+                    move_options,
+                    inline=True
+                ),
+                ui.input_action_button(
+                    "move_tasks", 
+                    "Move Tasks", 
+                    class_="btn-info"
                 )
-            ),
-            style="margin-bottom: 0;"
+            )
         )
+    
+    
+    @reactive.effect
+    @reactive.event(input.drag_drop_move)
+    def handle_drag_drop_move():
+        move_info = input.drag_drop_move()
+        current_data = lists_data.get().copy()
+        
+        source_list = current_data[move_info["sourceListId"]]
+        source_index = move_info["sourceIndex"]
+        target_list_id = move_info["targetListId"]
+        target_index = move_info["targetIndex"]
+        
+        # Get the task and description to move
+        task = source_list["tasks"][source_index]
+        desc = source_list["descriptions"][source_index]
+        
+        # Remove from source
+        source_list["tasks"].pop(source_index)
+        source_list["descriptions"].pop(source_index)
+        
+        # Add to target
+        if target_list_id == move_info["sourceListId"]:
+            # Moving within the same list
+            if target_index >= 0:
+                # Insert at specific position
+                target_index = min(target_index, len(source_list["tasks"]))
+                source_list["tasks"].insert(target_index, task)
+                source_list["descriptions"].insert(target_index, desc)
+            else:
+                # Append to end
+                source_list["tasks"].append(task)
+                source_list["descriptions"].append(desc)
+        else:
+            # Moving to different list
+            target_list = current_data[target_list_id]
+            if target_index >= 0:
+                # Insert at specific position
+                target_index = min(target_index, len(target_list["tasks"]))
+                target_list["tasks"].insert(target_index, task)
+                target_list["descriptions"].insert(target_index, desc)
+            else:
+                # Append to end
+                target_list["tasks"].append(task)
+                target_list["descriptions"].append(desc)
+        
+        lists_data.set(current_data)
+        changes_unsaved.set(True)
+
 
     @render.ui
     def edit_controls():
         if not input.selected_tasks():
-            return ui.div()  # Return empty div without a card when no tasks selected
+            return ui.div()
         
-        # Show controls based on selection
         if len(input.selected_tasks()) == 1:
-            # Single item selected - show all controls
             if editing.get():
-                # Show edit form
                 task_idx = int(input.selected_tasks()[0]) - 1
                 current_list = get_current_list()
                 
-                return ui.card(  # Now wrap in card only when there's content
+                return ui.card(
+                    {"class": "control-panel"},
                     ui.h4("Edit Task"),
                     ui.input_text(
                         "edit_task",
@@ -345,31 +541,31 @@ def server(input, output, session):
                         height="100px"
                     ),
                     ui.div(
+                        {"class": "button-container"},
                         ui.input_action_button("save_edit", "Save", class_="btn-success"),
-                        ui.input_action_button("cancel_edit", "Cancel", class_="btn-secondary"),
-                        style="display: flex; gap: 10px;"
+                        ui.input_action_button("cancel_edit", "Cancel", class_="btn-secondary")
                     )
                 )
             else:
-                # Show action buttons for single selection
-                return ui.card(  # Now wrap in card only when there's content
+                return ui.card(
+                    {"class": "control-panel"},
                     ui.div(
+                        {"class": "button-container"},
                         ui.input_action_button("delete_task", "Delete Task", class_="btn-danger"),
                         ui.input_action_button("start_edit", "Edit Task", class_="btn-warning"),
                         ui.input_action_button("move_up", "↑ Move Up", class_="btn-primary"),
-                        ui.input_action_button("move_down", "↓ Move Down", class_="btn-primary"),
-                        style="display: flex; gap: 10px; flex-wrap: wrap;"
+                        ui.input_action_button("move_down", "↓ Move Down", class_="btn-primary")
                     )
                 )
         else:
-            # Multiple items selected - only show delete button
-            return ui.card(  # Now wrap in card only when there's content
+            return ui.card(
+                {"class": "control-panel"},
                 ui.div(
-                    ui.input_action_button("delete_task", "Delete Selected Tasks", class_="btn-danger"),
-                    style="display: flex; gap: 10px;"
+                    {"class": "button-container"},
+                    ui.input_action_button("delete_task", "Delete Selected Tasks", class_="btn-danger")
                 )
             )
-
+        
 
 
 
